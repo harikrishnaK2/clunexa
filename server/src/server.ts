@@ -1,0 +1,414 @@
+import express from 'express';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
+import cors from 'cors';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import * as RM from './RoomManager.js';
+import * as GE from './GameEngine.js';
+import { TimerManager } from './TimerManager.js';
+import { pickWord } from './WordBank.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: { origin: '*' },
+  pingTimeout: 30000,
+  pingInterval: 10000,
+});
+const timerManager = new TimerManager();
+
+const PORT = process.env.PORT || 3001;
+
+// Serve React client in production
+const clientDist = join(__dirname, '../../client/dist');
+app.use(express.static(clientDist));
+app.get('*', (_req, res) => {
+  res.sendFile(join(clientDist, 'index.html'));
+});
+
+// ─── Broadcast helpers ────────────────────────────────────────────────────────
+
+function broadcastState(room: GE.Room) {
+  for (const [playerId] of room.players) {
+    const state = GE.buildClientState(room, playerId);
+    io.to(playerId).emit('state_update', state);
+  }
+}
+
+function sendError(socketId: string, message: string) {
+  io.to(socketId).emit('error_toast', { message, type: 'error' });
+}
+
+function sendInfo(socketId: string, message: string) {
+  io.to(socketId).emit('error_toast', { message, type: 'info' });
+}
+
+// ─── Game flow helpers ────────────────────────────────────────────────────────
+
+function startRound(room: GE.Room) {
+  // Advance guesser, skip disconnected
+  const total = room.guesserOrder.length;
+  let attempts = 0;
+  do {
+    room.guesserIndex = (room.guesserIndex + 1) % total;
+    attempts++;
+  } while (
+    !room.players.get(room.guesserOrder[room.guesserIndex])?.connected &&
+    attempts <= total
+  );
+
+  // Reset round state
+  room.clues.clear();
+  room.guess = null;
+  room.isCorrect = null;
+  room.scoreDeltas = null;
+
+  // Pick a fresh word
+  const wordEntry = pickWord(room.usedWords);
+  room.secretWord = wordEntry.word;
+  room.category = wordEntry.category;
+
+  room.phase = 'ROUND_INTRO';
+  broadcastState(room);
+
+  // After 3s intro, start clue submission
+  setTimeout(() => {
+    if (room.phase !== 'ROUND_INTRO') return; // guard against race
+    room.phase = 'CLUE_SUBMISSION';
+    broadcastState(room);
+
+    timerManager.startTimer(
+      room,
+      room.settings.submissionTimeSec,
+      (rem) => {
+        room.timeRemaining = rem;
+        io.to(room.code).emit('timer_tick', rem);
+      },
+      () => endClueSubmission(room)
+    );
+  }, 3000);
+}
+
+function endClueSubmission(room: GE.Room) {
+  timerManager.clearTimer(room);
+  GE.detectDuplicates(room.clues);
+  room.phase = 'CLUE_REVEAL';
+  broadcastState(room);
+
+  // Give clients time for the collision animation, then start guessing
+  setTimeout(() => {
+    if (room.phase !== 'CLUE_REVEAL') return;
+    room.phase = 'GUESSING';
+    broadcastState(room);
+
+    timerManager.startTimer(
+      room,
+      room.settings.guessTimeSec,
+      (rem) => {
+        room.timeRemaining = rem;
+        io.to(room.code).emit('timer_tick', rem);
+      },
+      () => endGuessing(room, null)
+    );
+  }, 6000);
+}
+
+function endGuessing(room: GE.Room, guess: string | null) {
+  timerManager.clearTimer(room);
+  room.phase = 'ROUND_RESULT';
+  room.guess = guess;
+
+  // Normalize and compare
+  const normalizedGuess = guess ? GE.normalizeClue(guess) : '';
+  const normalizedSecret = GE.normalizeClue(room.secretWord);
+  const isCorrect = normalizedGuess.length > 0 && normalizedGuess === normalizedSecret;
+  room.isCorrect = isCorrect;
+
+  // Calculate score deltas
+  const deltas: Record<string, number> = {};
+  for (const [pid] of room.players) deltas[pid] = 0;
+
+  if (isCorrect) {
+    const guesserId = room.guesserOrder[room.guesserIndex];
+    deltas[guesserId] = (deltas[guesserId] || 0) + 100;
+    const guesser = room.players.get(guesserId);
+    if (guesser) guesser.score += 100;
+
+    for (const c of room.clues.values()) {
+      if (!c.isDuplicate) {
+        deltas[c.playerId] = (deltas[c.playerId] || 0) + 50;
+        const giver = room.players.get(c.playerId);
+        if (giver) giver.score += 50;
+      }
+    }
+  }
+
+  room.scoreDeltas = deltas;
+  broadcastState(room);
+
+  // After 7s result display, go to next round or game over
+  setTimeout(() => {
+    if (room.phase !== 'ROUND_RESULT') return;
+    if (room.roundNumber < room.totalRounds) {
+      room.roundNumber++;
+      startRound(room);
+    } else {
+      room.phase = 'GAME_OVER';
+      broadcastState(room);
+    }
+  }, 7000);
+}
+
+// ─── Socket handlers ──────────────────────────────────────────────────────────
+
+io.on('connection', (socket) => {
+  let currentRoom: GE.Room | null = null;
+  let currentPlayerId: string | null = null;
+
+  // ── create_room ──────────────────────────────────────────────────────────
+  socket.on('create_room', (data: { playerName: string; playerToken: string }) => {
+    try {
+      if (!data.playerName || data.playerName.trim().length === 0) {
+        return sendError(socket.id, 'Please enter your name.');
+      }
+      const sanitizedName = data.playerName.trim().substring(0, 16)
+        .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const token = data.playerToken || '';
+
+      const room = RM.createRoom(socket.id, sanitizedName, token);
+      currentRoom = room;
+      currentPlayerId = socket.id;
+
+      socket.join(room.code);
+      socket.emit('token_update', room.players.get(socket.id)?.token || '');
+      broadcastState(room);
+    } catch (err) {
+      sendError(socket.id, 'Failed to create room. Please try again.');
+    }
+  });
+
+  // ── join_room ────────────────────────────────────────────────────────────
+  socket.on('join_room', (data: { roomCode: string; playerName: string; playerToken: string }) => {
+    try {
+      const code = (data.roomCode || '').trim().toUpperCase();
+      if (code.length !== 4) return sendError(socket.id, 'Room code must be 4 letters.');
+
+      const room = RM.getRoom(code);
+      if (!room) return sendError(socket.id, `Room "${code}" not found.`);
+
+      const sanitizedName = (data.playerName || '').trim().substring(0, 16)
+        .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      if (!sanitizedName) return sendError(socket.id, 'Please enter your name.');
+
+      const token = data.playerToken || '';
+
+      // Check reconnect by token
+      let isRejoin = false;
+      for (const p of room.players.values()) {
+        if (p.token === token && token.length > 0) {
+          isRejoin = true;
+          break;
+        }
+      }
+
+      if (!isRejoin) {
+        if (room.players.size >= 8) return sendError(socket.id, 'Room is full (max 8 players).');
+        if (room.phase !== 'LOBBY') return sendError(socket.id, 'Game already started. Wait for the next game.');
+      }
+
+      const player = RM.addPlayer(room, socket.id, sanitizedName, token);
+      currentRoom = room;
+      currentPlayerId = socket.id;
+
+      socket.join(room.code);
+      socket.emit('token_update', player.token);
+      broadcastState(room);
+    } catch (err) {
+      sendError(socket.id, 'Failed to join room. Please try again.');
+    }
+  });
+
+  // ── start_game ───────────────────────────────────────────────────────────
+  socket.on('start_game', (data: { rounds?: number }) => {
+    try {
+      if (!currentRoom || !currentPlayerId) return;
+      if (currentRoom.hostId !== currentPlayerId) return sendError(socket.id, 'Only the host can start the game.');
+      if (currentRoom.phase !== 'LOBBY') return;
+
+      const connectedPlayers = Array.from(currentRoom.players.values()).filter(p => p.connected);
+      if (connectedPlayers.length < 2) return sendError(socket.id, 'Need at least 2 players to start.');
+
+      const roundsPerPlayer = Math.max(1, Math.min(5, data?.rounds || 1));
+      currentRoom.settings.roundsPerPlayer = roundsPerPlayer;
+      currentRoom.totalRounds = connectedPlayers.length * roundsPerPlayer;
+      currentRoom.roundNumber = 1;
+
+      // Build guesser rotation from connected players in order
+      currentRoom.guesserOrder = connectedPlayers.map(p => p.id);
+      currentRoom.guesserIndex = -1; // startRound will advance to 0
+
+      startRound(currentRoom);
+    } catch (err) {
+      sendError(socket.id, 'Failed to start game. Please try again.');
+    }
+  });
+
+  // ── submit_clue ──────────────────────────────────────────────────────────
+  socket.on('submit_clue', (data: { clue: string }) => {
+    try {
+      if (!currentRoom || !currentPlayerId) return;
+      if (currentRoom.phase !== 'CLUE_SUBMISSION') return;
+
+      // Must not be the guesser
+      const guesserId = currentRoom.guesserOrder[currentRoom.guesserIndex];
+      if (guesserId === currentPlayerId) return sendError(socket.id, 'You are the guesser — no clues!');
+
+      // No double submission
+      if (currentRoom.clues.has(currentPlayerId)) return;
+
+      const raw = (data.clue || '').trim();
+      if (raw.length === 0) return sendError(socket.id, 'Clue cannot be empty.');
+      if (raw.includes(' ')) return sendError(socket.id, 'Clue must be a single word (no spaces).');
+      if (raw.length > 20) return sendError(socket.id, 'Clue too long (max 20 characters).');
+
+      // Reject if clue IS the secret word
+      if (GE.normalizeClue(raw) === GE.normalizeClue(currentRoom.secretWord)) {
+        return sendError(socket.id, 'You cannot use the secret word as a clue!');
+      }
+
+      currentRoom.clues.set(currentPlayerId, {
+        playerId: currentPlayerId,
+        rawClue: raw,
+        normalized: GE.normalizeClue(raw),
+        isDuplicate: false,
+      });
+
+      // Check if all active clue givers have submitted
+      const activeGivers = Array.from(currentRoom.players.values()).filter(
+        p => p.connected && p.id !== guesserId
+      ).length;
+
+      if (currentRoom.clues.size >= activeGivers) {
+        endClueSubmission(currentRoom);
+      } else {
+        broadcastState(currentRoom);
+      }
+    } catch (err) {
+      sendError(socket.id, 'Failed to submit clue.');
+    }
+  });
+
+  // ── submit_guess ─────────────────────────────────────────────────────────
+  socket.on('submit_guess', (data: { guess: string }) => {
+    try {
+      if (!currentRoom || !currentPlayerId) return;
+      if (currentRoom.phase !== 'GUESSING') return;
+
+      const guesserId = currentRoom.guesserOrder[currentRoom.guesserIndex];
+      if (guesserId !== currentPlayerId) return;
+
+      const guess = (data.guess || '').trim();
+      endGuessing(currentRoom, guess);
+    } catch (err) {
+      sendError(socket.id, 'Failed to submit guess.');
+    }
+  });
+
+  // ── play_again ───────────────────────────────────────────────────────────
+  socket.on('play_again', () => {
+    try {
+      if (!currentRoom || !currentPlayerId) return;
+      if (currentRoom.hostId !== currentPlayerId) return;
+      if (currentRoom.phase !== 'GAME_OVER') return;
+
+      // Reset game state, keep players
+      currentRoom.phase = 'LOBBY';
+      currentRoom.clues.clear();
+      currentRoom.usedWords.clear();
+      currentRoom.guess = null;
+      currentRoom.isCorrect = null;
+      currentRoom.scoreDeltas = null;
+      currentRoom.secretWord = '';
+      currentRoom.category = '';
+      currentRoom.roundNumber = 0;
+      currentRoom.totalRounds = 0;
+      currentRoom.guesserIndex = -1;
+      currentRoom.guesserOrder = [];
+      timerManager.clearTimer(currentRoom);
+
+      // Reset all scores
+      for (const p of currentRoom.players.values()) {
+        p.score = 0;
+        if (p.connected) {
+          currentRoom.guesserOrder.push(p.id);
+        }
+      }
+
+      broadcastState(currentRoom);
+    } catch (err) {
+      sendError(socket.id, 'Failed to reset game.');
+    }
+  });
+
+  // ── disconnect ───────────────────────────────────────────────────────────
+  socket.on('disconnect', () => {
+    if (!currentRoom || !currentPlayerId) return;
+
+    RM.removePlayer(currentRoom, currentPlayerId);
+
+    const connectedCount = Array.from(currentRoom.players.values()).filter(p => p.connected).length;
+
+    if (connectedCount === 0) {
+      // All gone — clean up timer
+      timerManager.clearTimer(currentRoom);
+      return;
+    }
+
+    // If mid-game and the guesser disconnected, skip the round
+    if (currentRoom.phase !== 'LOBBY' && currentRoom.phase !== 'GAME_OVER') {
+      const guesserId = currentRoom.guesserOrder[currentRoom.guesserIndex];
+      if (guesserId === currentPlayerId) {
+        timerManager.clearTimer(currentRoom);
+        if (currentRoom.roundNumber < currentRoom.totalRounds) {
+          currentRoom.roundNumber++;
+          startRound(currentRoom);
+          return;
+        } else {
+          currentRoom.phase = 'GAME_OVER';
+          broadcastState(currentRoom);
+          return;
+        }
+      }
+
+      // If all clue givers disconnected during submission, end submission early
+      if (currentRoom.phase === 'CLUE_SUBMISSION') {
+        const guesserId2 = currentRoom.guesserOrder[currentRoom.guesserIndex];
+        const remainingGivers = Array.from(currentRoom.players.values()).filter(
+          p => p.connected && p.id !== guesserId2
+        );
+        if (remainingGivers.length === 0) {
+          endClueSubmission(currentRoom);
+          return;
+        }
+        // Check if all remaining givers already submitted
+        if (currentRoom.clues.size >= remainingGivers.length) {
+          endClueSubmission(currentRoom);
+          return;
+        }
+      }
+    }
+
+    broadcastState(currentRoom);
+  });
+});
+
+httpServer.listen(PORT, () => {
+  console.log(`🎮 CLUNEXA server running on port ${PORT}`);
+  console.log(`   Mode: ${process.env.NODE_ENV || 'development'}`);
+});
