@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { ClientGameState } from '../types/game';
 
-const SOCKET_URL = import.meta.env.DEV ? 'http://localhost:3001' : window.location.origin;
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || (import.meta.env.DEV ? 'http://localhost:3001' : window.location.origin);
 
 export interface GameActions {
   createRoom: (name: string) => void;
