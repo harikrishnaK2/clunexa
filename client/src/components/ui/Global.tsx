@@ -131,8 +131,8 @@ export const ConnectionBanner = ({ state }: { state: string }) => {
     <div className="fixed top-0 left-0 right-0 z-50 bg-amber-hot text-void text-center py-2 font-bold text-sm flex items-center justify-center gap-2">
       <div className="w-2 h-2 rounded-full bg-void/40 animate-ping" />
       {state === 'connecting'
-        ? 'Connecting to server…'
-        : 'Disconnected — trying to reconnect…'}
+        ? 'Connecting to game server… (may take a moment if server is waking up)'
+        : 'Disconnected from server — trying to reconnect…'}
     </div>
   );
 };

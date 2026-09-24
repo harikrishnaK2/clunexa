@@ -2,7 +2,22 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { ClientGameState } from '../types/game';
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || (import.meta.env.DEV ? 'http://localhost:3001' : window.location.origin);
+function getSocketUrl(): string {
+  const envUrl = import.meta.env.VITE_SOCKET_URL;
+  if (envUrl && typeof envUrl === 'string' && envUrl.trim().length > 0) {
+    let clean = envUrl.trim().replace(/\/+$/, '');
+    if (!clean.startsWith('http://') && !clean.startsWith('https://')) {
+      clean = 'https://' + clean;
+    }
+    return clean;
+  }
+  if (import.meta.env.DEV) {
+    return 'http://localhost:3001';
+  }
+  return window.location.origin;
+}
+
+const SOCKET_URL = getSocketUrl();
 
 export interface GameActions {
   createRoom: (name: string) => void;
@@ -26,10 +41,14 @@ export function useSocketGame() {
   const [isJoining, setIsJoining] = useState(false);
 
   useEffect(() => {
+    console.log('[CLUNEXA] Connecting to WebSocket backend at:', SOCKET_URL);
+
     const s = io(SOCKET_URL, {
       autoConnect: true,
-      reconnectionAttempts: 10,
+      transports: ['websocket', 'polling'],
+      reconnectionAttempts: 20,
       reconnectionDelay: 1000,
+      timeout: 20000,
     });
 
     socketRef.current = s;
