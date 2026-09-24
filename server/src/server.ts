@@ -9,6 +9,8 @@ import * as GE from './GameEngine.js';
 import { TimerManager } from './TimerManager.js';
 import { pickWord } from './WordBank.js';
 
+import { existsSync } from 'fs';
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const app = express();
@@ -27,10 +29,28 @@ const PORT = process.env.PORT || 3001;
 
 // Serve React client in production
 const clientDist = join(__dirname, '../../client/dist');
-app.use(express.static(clientDist));
-app.get('*', (_req, res) => {
-  res.sendFile(join(clientDist, 'index.html'));
-});
+const indexPath = join(clientDist, 'index.html');
+
+if (existsSync(indexPath)) {
+  app.use(express.static(clientDist));
+  app.get('*', (_req, res) => {
+    res.sendFile(indexPath);
+  });
+} else {
+  app.get('*', (_req, res) => {
+    res.status(200).send(`
+      <!DOCTYPE html>
+      <html>
+        <head><title>CLUNEXA Server</title></head>
+        <body style="font-family: sans-serif; background: #0B0B14; color: #F8FAFC; text-align: center; padding: 50px;">
+          <h1 style="color: #A78BFA;">🎮 CLUNEXA Server is Live</h1>
+          <p>WebSocket server is running on port ${PORT}.</p>
+          <p style="color: #94A3B8;">Frontend build not found at <code>${clientDist}</code>.</p>
+        </body>
+      </html>
+    `);
+  });
+}
 
 // ─── Broadcast helpers ────────────────────────────────────────────────────────
 
