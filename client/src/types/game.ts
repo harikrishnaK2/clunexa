@@ -30,10 +30,12 @@ export interface ClientGameState {
   guesserId: string;
   guesserName: string;
   category: string;
+  categoryFilter: string;
   /** null when receiver is NOT the clue giver during active play */
   secretWord: string | null;
   clue: string | null;
   timeRemaining: number;
+  streaks: Record<string, number>;
   submissionProgress: {
     total: number;
     submitted: number;

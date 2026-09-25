@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { sounds } from '../../utils/sounds';
 
 // ─── Radial countdown timer ───────────────────────────────────────────────────
 
@@ -9,6 +10,7 @@ export const RadialTimer = ({
   seconds: number;
   maxSeconds: number;
 }) => {
+  useEffect(() => { if (seconds > 0) { if (seconds <= 5) sounds.urgentTick(); else if (seconds <= 10) sounds.tick(); } }, [seconds]);
   const radius = 38;
   const circumference = 2 * Math.PI * radius;
   const pct = maxSeconds > 0 ? Math.max(0, Math.min(1, seconds / maxSeconds)) : 0;

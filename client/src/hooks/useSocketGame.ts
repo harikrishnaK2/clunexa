@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { ClientGameState } from '../types/game';
+import { sounds } from '../utils/sounds';
+
 
 function getSocketUrl(): string {
   const envUrl = import.meta.env.VITE_SOCKET_URL;
@@ -28,11 +30,19 @@ export interface GameActions {
   playAgain: () => void;
   copyRoomLink: () => void;
   leaveRoom: () => void;
+  setCategoryFilter: (filter: string) => void;
+  sendEmoji: (emoji: string) => void;
+  toggleSound: () => boolean;
+}
+
+interface EmojiBurst {
+  id: string;
+  emoji: string;
+  playerName: string;
+  x: number;
 }
 
 export function useSocketGame() {
-  // Use a ref to always have access to the live socket instance
-  // regardless of React state batching timing.
   const socketRef = useRef<Socket | null>(null);
   const [socket, setSocket] = useState<Socket | null>(null);
   const [gameState, setGameState] = useState<ClientGameState | null>(null);
@@ -40,6 +50,7 @@ export function useSocketGame() {
   const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isJoining, setIsJoining] = useState(false);
+  const [emojiBursts, setEmojiBursts] = useState<EmojiBurst[]>([]);
 
   useEffect(() => {
     console.log('[CLUNEXA] Connecting to WebSocket backend at:', SOCKET_URL);
@@ -57,35 +68,26 @@ export function useSocketGame() {
 
     s.on('connect', () => {
       setConnectionState('connected');
-
       const savedToken = sessionStorage.getItem('clunexa-token') || sessionStorage.getItem('clue-clash-token');
       const savedRoom  = sessionStorage.getItem('clunexa-room')  || sessionStorage.getItem('clue-clash-room');
       const savedName  = localStorage.getItem('clunexa-name')   || localStorage.getItem('clue-clash-name');
-
-      // Auto-rejoin on reconnect (page refresh / network blip)
       if (savedToken && savedRoom && savedName) {
-        s.emit('join_room', {
-          roomCode: savedRoom,
-          playerName: savedName,
-          playerToken: savedToken,
-        });
+        s.emit('join_room', { roomCode: savedRoom, playerName: savedName, playerToken: savedToken });
       }
     });
 
-    s.on('connect_error', () => {
-      setConnectionState('disconnected');
-    });
-
-    s.on('disconnect', () => {
-      setConnectionState('disconnected');
-    });
-
-    s.on('reconnect', () => {
-      setConnectionState('connected');
-    });
+    s.on('connect_error', () => setConnectionState('disconnected'));
+    s.on('disconnect', () => setConnectionState('disconnected'));
+    s.on('reconnect', () => setConnectionState('connected'));
 
     s.on('state_update', (state: ClientGameState) => {
-      setGameState(state);
+      setGameState(prev => {
+        if (prev?.phase !== state.phase) {
+          if (state.phase === 'CLUE_REVEAL') sounds.reveal();
+          if (state.phase === 'ROUND_INTRO') sounds.gameStart();
+        }
+        return state;
+      });
       setTimeRemaining(state.timeRemaining);
       setIsJoining(false);
       sessionStorage.setItem('clunexa-room', state.roomCode);
@@ -95,7 +97,15 @@ export function useSocketGame() {
       setTimeRemaining(rem);
     });
 
-    // BUG FIX: server sends { message, type } object — handle both string and object
+    s.on('emoji_burst', (data: { emoji: string; playerName: string }) => {
+      const id = Math.random().toString(36).substr(2, 9);
+      const x = 10 + Math.random() * 80;
+      setEmojiBursts(prev => [...prev, { id, emoji: data.emoji, playerName: data.playerName, x }]);
+      setTimeout(() => {
+        setEmojiBursts(prev => prev.filter(b => b.id !== id));
+      }, 3000);
+    });
+
     s.on('error_toast', (payload: string | { message: string; type?: string }) => {
       const msg = typeof payload === 'string' ? payload : payload?.message ?? 'Unknown error';
       setErrorMessage(msg);
@@ -113,18 +123,10 @@ export function useSocketGame() {
     };
   }, []);
 
-  // BUG FIX: use the ref (always has the live socket) instead of
-  // the React state (which may lag by one render cycle).
   const emit = useCallback((event: string, data?: unknown) => {
     const s = socketRef.current;
-    if (!s) {
-      setErrorMessage('Not connected to server. Please refresh.');
-      return false;
-    }
-    if (!s.connected) {
-      setErrorMessage('Connection lost. Reconnecting…');
-      return false;
-    }
+    if (!s) { setErrorMessage('Not connected to server. Please refresh.'); return false; }
+    if (!s.connected) { setErrorMessage('Connection lost. Reconnecting…'); return false; }
     if (data !== undefined) s.emit(event, data);
     else s.emit(event);
     return true;
@@ -155,32 +157,33 @@ export function useSocketGame() {
     if (!ok) setIsJoining(false);
   }, [emit]);
 
-  const startGame = useCallback((rounds: number = 1) => {
-    emit('start_game', { rounds });
-  }, [emit]);
-
+  const startGame = useCallback((rounds: number = 1) => emit('start_game', { rounds }), [emit]);
+  
   const submitClue = useCallback((clue: string) => {
+    sounds.ding();
     emit('submit_clue', { clue });
   }, [emit]);
-
+  
   const submitGuess = useCallback((guess: string) => {
+    sounds.ding();
     emit('submit_guess', { guess });
   }, [emit]);
-
-  const playAgain = useCallback(() => {
-    emit('play_again');
-  }, [emit]);
+  
+  const playAgain = useCallback(() => emit('play_again'), [emit]);
+  
+  const setCategoryFilter = useCallback((filter: string) => emit('set_category_filter', { filter }), [emit]);
+  const sendEmoji = useCallback((emoji: string) => emit('emoji_react', { emoji }), [emit]);
+  const toggleSound = useCallback(() => sounds.toggle(), []);
 
   const copyRoomLink = useCallback(() => {
     if (gameState?.roomCode) {
       const url = `${window.location.origin}?room=${gameState.roomCode}`;
       navigator.clipboard.writeText(url)
         .then(() => {
-          setErrorMessage('✓ Link copied!');
+          setErrorMessage('🔗 Link copied!');
           setTimeout(() => setErrorMessage(null), 2500);
         })
         .catch(() => {
-          // Fallback: show the code prominently
           setErrorMessage(`Room code: ${gameState.roomCode}`);
           setTimeout(() => setErrorMessage(null), 5000);
         });
@@ -193,9 +196,7 @@ export function useSocketGame() {
     sessionStorage.removeItem('clunexa-token');
     sessionStorage.removeItem('clue-clash-room');
     sessionStorage.removeItem('clue-clash-token');
-    if (window.location.search) {
-      window.history.replaceState({}, '', window.location.pathname);
-    }
+    if (window.location.search) window.history.replaceState({}, '', window.location.pathname);
     setGameState(null);
     setIsJoining(false);
   }, [emit]);
@@ -206,6 +207,7 @@ export function useSocketGame() {
     connectionState,
     errorMessage,
     isJoining,
+    emojiBursts,
     actions: {
       createRoom,
       joinRoom,
@@ -215,8 +217,13 @@ export function useSocketGame() {
       playAgain,
       copyRoomLink,
       leaveRoom,
+      setCategoryFilter,
+      sendEmoji,
+      toggleSound,
     },
     socket,
     clearError: useCallback(() => setErrorMessage(null), []),
   };
 }
+
+

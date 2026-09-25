@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { ClientGameState } from '../../types/game';
 import { GameActions } from '../../hooks/useSocketGame';
 import { PlayerAvatar } from '../ui/Global';
@@ -94,7 +94,42 @@ export const LobbyView = ({
       {gameState.isHost ? (
         <div className="bg-surface border border-white/8 rounded-2xl p-5">
           <h3 className="font-display font-bold text-lg mb-4">Game Settings</h3>
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-6">
+            
+            <div>
+              <label className="text-xs text-muted uppercase tracking-wider font-semibold block mb-2">
+                Category
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { label: 'All Mix 🎲', value: 'All Mix' },
+                  { label: 'Cartoons 🧸', value: 'Cartoons & Animation' },
+                  { label: 'Anime 🗡️', value: 'Anime & Manga' },
+                  { label: 'Superheroes 🦸', value: 'Superheroes & Villains' },
+                  { label: 'Movies 🎬', value: 'Movies & TV Shows' },
+                  { label: 'Food 🍕', value: 'Food & Treats' },
+                  { label: 'Desi Food 🍛', value: 'Desi Street Food & Sweets' },
+                  { label: 'Gaming 🎮', value: 'Games & Gaming' },
+                  { label: 'Internet 📱', value: 'Internet & Trends' },
+                  { label: 'Sports ⚽', value: 'Sports & Athletics' },
+                  { label: 'Space 🚀', value: 'Space & Astronomy' },
+                  { label: 'Travel ✈️', value: 'Travel & World Wonders' },
+                ].map(cat => (
+                  <button
+                    key={cat.value}
+                    onClick={() => actions.setCategoryFilter(cat.value)}
+                    className={`px-3 py-1.5 rounded-full font-semibold text-xs transition-all duration-150 ${
+                      gameState.categoryFilter === cat.value
+                        ? 'bg-brand text-ink shadow-md shadow-brand/30'
+                        : 'bg-surface-alt text-muted hover:text-ink hover:bg-surface-alt/70 border border-white/5'
+                    }`}
+                  >
+                    {cat.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div>
               <label className="text-xs text-muted uppercase tracking-wider font-semibold block mb-2">
                 Rounds per player
@@ -115,20 +150,24 @@ export const LobbyView = ({
                 ))}
               </div>
               <p className="text-muted text-xs mt-2 text-center">
-                Total: <span className="text-ink font-semibold">{connectedPlayers.length * rounds} rounds</span> &nbsp;·&nbsp;
+                Total: <span className="text-ink font-semibold">{connectedPlayers.length * rounds} rounds</span> • 
                 Everyone guesses {rounds} {rounds === 1 ? 'time' : 'times'}
               </p>
             </div>
           </div>
         </div>
       ) : (
-        <div className="bg-surface border border-white/8 rounded-2xl p-5 text-center">
+        <div className="bg-surface border border-white/8 rounded-2xl p-5 text-center flex flex-col items-center">
           <div className="text-cyan-glow animate-pulse font-semibold text-lg mb-1">
-            Waiting for host to start…
+            Waiting for host to start...
           </div>
-          <p className="text-muted text-sm">
+          <p className="text-muted text-sm mb-3">
             Host: <span className="text-ink">{gameState.players.find(p => p.isHost)?.name ?? '?'}</span>
           </p>
+          <div className="bg-surface-alt border border-white/5 px-4 py-2 rounded-xl">
+            <span className="text-xs text-muted uppercase tracking-widest font-semibold block mb-1">Category</span>
+            <span className="font-bold text-brand-light">{gameState.categoryFilter || 'All Mix'}</span>
+          </div>
         </div>
       )}
 
@@ -137,7 +176,7 @@ export const LobbyView = ({
         <div className="pb-8">
           {!canStart && (
             <p className="text-center text-amber-hot text-sm mb-3 font-semibold">
-              ⚠ Need at least 2 players to start
+              ⚠️ Need at least 2 players to start
             </p>
           )}
           <button
@@ -145,7 +184,7 @@ export const LobbyView = ({
             disabled={!canStart}
             className="w-full py-5 font-display font-bold text-xl rounded-xl transition-all duration-200 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed bg-brand hover:bg-brand-light text-ink shadow-lg shadow-brand/30 hover:shadow-brand-light/30"
           >
-            Start Game →
+            Start Game 🚀
           </button>
         </div>
       )}

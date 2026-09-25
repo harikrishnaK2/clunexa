@@ -102,7 +102,8 @@ function startRound(room: GE.Room) {
   room.scoreDeltas = null;
 
   // Pick a fresh word
-  const wordEntry = pickWord(room.usedWords);
+  const filter = room.categoryFilter && room.categoryFilter !== 'All Mix' ? room.categoryFilter : null;
+  const wordEntry = pickWord(room.usedWords, filter);
   room.secretWord = wordEntry.word;
   room.category = wordEntry.category;
 
@@ -133,9 +134,10 @@ function endClueSubmission(room: GE.Room) {
   broadcastState(room);
 
   // Give clients 3.5s to view the revealed clue, then start guessing
-  setTimeout(() => {
+    setTimeout(() => {
     if (room.phase !== 'CLUE_REVEAL') return;
     room.phase = 'GUESSING';
+    room.guessingStartTime = Date.now();
     broadcastState(room);
 
     timerManager.startTimer(
@@ -166,13 +168,33 @@ function endGuessing(room: GE.Room) {
   );
   const totalGuessers = Math.max(1, activeGuessers.length);
 
+  // Sort correct guessers by speed
+  const correctGuessers = Array.from(room.guesses.values())
+    .filter(g => g.isCorrect)
+    .sort((a, b) => a.guessTimeMs - b.guessTimeMs);
+
+  const speedBonuses = [25, 15, 10, 5];
+
   let correctCount = 0;
-  for (const g of room.guesses.values()) {
-    if (g.isCorrect) {
+  for (const guess of Array.from(room.guesses.values())) {
+    const player = room.players.get(guess.playerId);
+    if (!player) continue;
+    if (guess.isCorrect) {
       correctCount++;
-      deltas[g.playerId] = 100;
-      const pl = room.players.get(g.playerId);
-      if (pl) pl.score += 100;
+      const speedRank = correctGuessers.findIndex(g => g.playerId === guess.playerId);
+      const speedBonus = speedBonuses[speedRank] ?? 0;
+      const base = 100;
+      
+      const currentStreak = (room.streak.get(guess.playerId) || 0) + 1;
+      room.streak.set(guess.playerId, currentStreak);
+      const streakBonus = currentStreak >= 3 ? 20 : currentStreak === 2 ? 10 : 0;
+      
+      const total = base + speedBonus + streakBonus;
+      deltas[guess.playerId] = total;
+      player.score += total;
+    } else {
+      room.streak.set(guess.playerId, 0);
+      deltas[guess.playerId] = 0;
     }
   }
 
@@ -338,6 +360,25 @@ io.on('connection', (socket) => {
   });
 
   // ── submit_guess ─────────────────────────────────────────────────────────
+  socket.on('set_category_filter', (data: { filter: string }) => {
+    if (!currentRoom || !currentPlayerId) return;
+    if (currentRoom.hostId !== currentPlayerId) return;
+    if (currentRoom.phase !== 'LOBBY') return;
+    currentRoom.categoryFilter = data.filter || 'All Mix';
+    broadcastState(currentRoom);
+  });
+
+  socket.on('emoji_react', (data: { emoji: string }) => {
+    if (!currentRoom || !currentPlayerId) return;
+    const player = currentRoom.players.get(currentPlayerId);
+    if (!player) return;
+    io.to(currentRoom.code).emit('emoji_burst', {
+      emoji: data.emoji,
+      playerId: currentPlayerId,
+      playerName: player.name,
+    });
+  });
+
   socket.on('submit_guess', (data: { guess: string }) => {
     try {
       if (!currentRoom || !currentPlayerId) return;
@@ -359,11 +400,13 @@ io.on('connection', (socket) => {
       const isCorrect = GE.normalizeClue(raw) === GE.normalizeClue(currentRoom.secretWord);
       const player = currentRoom.players.get(currentPlayerId);
 
+      const guessTimeMs = Date.now() - (currentRoom.guessingStartTime || Date.now());
       currentRoom.guesses.set(currentPlayerId, {
         playerId: currentPlayerId,
         playerName: player?.name ?? 'Player',
         guess: raw,
         isCorrect,
+        guessTimeMs,
       });
 
       // Check if all active guessers have now submitted
@@ -408,6 +451,8 @@ io.on('connection', (socket) => {
       currentRoom.clueGiverOrder = [];
       currentRoom.guesserIndex = -1;
       currentRoom.guesserOrder = [];
+      currentRoom.streak.clear();
+      currentRoom.guessingStartTime = 0;
       timerManager.clearTimer(currentRoom);
 
       // Reset all scores

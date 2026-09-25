@@ -1,12 +1,16 @@
-import React, { useEffect } from 'react';
+﻿import React, { useEffect } from 'react';
 import { ClientGameState } from '../../types/game';
 import { GameActions } from '../../hooks/useSocketGame';
 import { PlayerAvatar } from '../ui/Global';
 import confetti from 'canvas-confetti';
-
-// ─── Round Result ─────────────────────────────────────────────────────────────
+import { sounds } from '../../utils/sounds';
 
 export const RoundResultView = ({ gameState }: { gameState: ClientGameState }) => {
+  useEffect(() => {
+    if (gameState.isCorrect === true) sounds.success();
+    else if (gameState.isCorrect === false) sounds.fail();
+  }, [gameState.isCorrect]);
+
   const sortedPlayers = [...gameState.players].sort((a, b) => b.score - a.score);
   const clueGiverId = gameState.clueGiverId || gameState.guesserId;
   const clueGiverName = gameState.clueGiverName || gameState.guesserName || 'Clue Typer';
@@ -33,8 +37,8 @@ export const RoundResultView = ({ gameState }: { gameState: ClientGameState }) =
           } animate-score-pop`}
         >
           {correctCount > 0
-            ? `${correctCount} of ${totalGuessers} Guessed Correctly! 🎉`
-            : 'Nobody Guessed Correctly! 😶'}
+            ? `${correctCount} of ${totalGuessers} Guessed Correctly! 🎯`
+            : 'Nobody Guessed Correctly! 😢'}
         </div>
 
         <p className="text-muted mt-2 text-sm">
@@ -88,39 +92,53 @@ export const RoundResultView = ({ gameState }: { gameState: ClientGameState }) =
           <div className="flex flex-col gap-2">
             {guesses.map((g, i) => {
               const delta = gameState.scoreDeltas?.[g.playerId] ?? (g.isCorrect ? 100 : 0);
+              const streak = gameState.streaks?.[g.playerId] || 0;
+              const hasSpeed = g.isCorrect && delta > 100 && (delta % 10 !== 0 || delta === 125 || delta === 115 || delta === 110 || delta === 105);
+              const speedPoints = delta > 100 ? (delta - 100 - (streak >= 3 ? 20 : streak === 2 ? 10 : 0)) : 0;
+              const streakPoints = streak >= 3 ? 20 : streak === 2 ? 10 : 0;
+
               return (
                 <div
                   key={i}
-                  className={`flex items-center justify-between p-3 rounded-xl border ${
+                  className={`flex flex-col gap-1 p-3 rounded-xl border ${
                     g.isCorrect
                       ? 'bg-emerald-alive/10 border-emerald-alive/30'
                       : 'bg-surface-alt/50 border-white/5'
                   }`}
                 >
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <span className="font-semibold text-sm truncate">{g.playerName}</span>
-                    <span className="text-muted text-xs font-mono uppercase">
-                      "{g.guess}"
-                    </span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <span className="font-semibold text-sm truncate">{g.playerName}</span>
+                      <span className="text-muted text-xs font-mono uppercase">
+                        "{g.guess}"
+                      </span>
+                      {streak >= 2 && <span className="text-sm" title={`Streak: ${streak}`}>🔥</span>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                          g.isCorrect
+                            ? 'bg-emerald-alive/20 text-emerald-alive'
+                            : 'bg-crimson-clash/20 text-crimson-clash'
+                        }`}
+                      >
+                        {g.isCorrect ? '✓ Correct' : '✗ Wrong'}
+                      </span>
+                      <span
+                        className={`font-mono font-bold text-base w-12 text-right ${
+                          g.isCorrect ? 'text-emerald-alive' : 'text-muted'
+                        }`}
+                      >
+                        +{delta}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                        g.isCorrect
-                          ? 'bg-emerald-alive/20 text-emerald-alive'
-                          : 'bg-crimson-clash/20 text-crimson-clash'
-                      }`}
-                    >
-                      {g.isCorrect ? '✓ Correct' : '✕ Wrong'}
-                    </span>
-                    <span
-                      className={`font-mono font-bold text-base w-12 text-right ${
-                        g.isCorrect ? 'text-emerald-alive' : 'text-muted'
-                      }`}
-                    >
-                      +{delta}
-                    </span>
-                  </div>
+                  {g.isCorrect && (speedPoints > 0 || streakPoints > 0) && (
+                    <div className="flex gap-3 justify-end text-xs font-semibold pr-16 mt-1">
+                      {speedPoints > 0 && <span className="text-amber-hot">⚡ Speed Bonus +{speedPoints}</span>}
+                      {streakPoints > 0 && <span className="text-orange-500">🔥 Streak Bonus +{streakPoints}</span>}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -153,15 +171,9 @@ export const RoundResultView = ({ gameState }: { gameState: ClientGameState }) =
           })}
         </div>
       </div>
-
-      <p className="text-center text-muted text-xs mt-6 animate-pulse">
-        Next round starting in a few seconds…
-      </p>
     </div>
   );
 };
-
-// ─── Game Over / Winner Podium ────────────────────────────────────────────────
 
 export const GameOverView = ({
   gameState,
@@ -258,6 +270,37 @@ export const GameOverView = ({
         </div>
       </div>
 
+      {/* Fun Awards */}
+      <div className="w-full flex flex-col gap-3 mb-8">
+        {Object.entries(gameState.streaks || {}).length > 0 && (() => {
+          const maxStreakEntry = Object.entries(gameState.streaks).reduce((max, entry) => entry[1] > max[1] ? entry : max, ['', 0]);
+          const speedDemon = gameState.players.find(p => p.id === maxStreakEntry[0]);
+          if (speedDemon && maxStreakEntry[1] > 1) return (
+            <div className="bg-amber-hot/10 border border-amber-hot/30 p-4 rounded-xl flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="text-3xl">⚡</div>
+                <div>
+                  <div className="font-bold text-amber-hot">Speed Demon</div>
+                  <div className="text-xs text-amber-hot/70">Highest Streak ({maxStreakEntry[1]})</div>
+                </div>
+              </div>
+              <div className="font-semibold text-sm">{speedDemon.name}</div>
+            </div>
+          );
+          return null;
+        })()}
+        <div className="bg-cyan-glow/10 border border-cyan-glow/30 p-4 rounded-xl flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="text-3xl">🧠</div>
+            <div>
+              <div className="font-bold text-cyan-glow">Brain of the Game</div>
+              <div className="text-xs text-cyan-glow/70">Highest Total Score</div>
+            </div>
+          </div>
+          <div className="font-semibold text-sm">{first?.name}</div>
+        </div>
+      </div>
+
       {/* Actions */}
       {gameState.isHost ? (
         <div className="w-full flex flex-col gap-3">
@@ -265,7 +308,7 @@ export const GameOverView = ({
             onClick={actions.playAgain}
             className="w-full py-5 font-display font-bold text-xl rounded-xl transition-all duration-200 active:scale-95 bg-brand hover:bg-brand-light text-ink shadow-lg shadow-brand/30"
           >
-            Play Again 🔄
+            Play Again 🏆
           </button>
           <button
             onClick={actions.leaveRoom}
@@ -275,11 +318,13 @@ export const GameOverView = ({
           </button>
         </div>
       ) : (
-        <div className="text-center">
-          <p className="text-muted font-semibold">Waiting for host to play again…</p>
+        <div className="w-full flex flex-col gap-3">
+          <div className="w-full py-4 text-center font-semibold text-brand-light bg-brand/10 border border-brand/20 rounded-xl animate-pulse">
+            Waiting for host to play again...
+          </div>
           <button
             onClick={actions.leaveRoom}
-            className="mt-4 px-6 py-2 font-semibold text-sm rounded-xl border border-white/10 text-muted hover:text-ink transition-colors"
+            className="w-full py-3 font-semibold text-base rounded-xl transition-all duration-200 border border-white/10 text-muted hover:text-ink hover:border-white/20"
           >
             Leave Game
           </button>

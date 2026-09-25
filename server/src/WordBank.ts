@@ -1329,43 +1329,28 @@ export const WORD_BANK: WordEntry[] = [
 const globalRecentWords: string[] = [];
 const MAX_GLOBAL_RECENT = 250; // Keep the last 250 chosen words in global anti-repeat memory
 
-export function pickWord(roomUsedWords: Set<string>): WordEntry {
+export function pickWord(roomUsedWords: Set<string>, categoryFilter?: string | null): WordEntry {
   const roomUsedLower = new Set(Array.from(roomUsedWords).map(w => w.toLowerCase()));
   const globalRecentLower = new Set(globalRecentWords.map(w => w.toLowerCase()));
-
-  // 1. First priority: words neither used in this room NOR used recently in other games
-  let candidates = WORD_BANK.filter(
+  
+  const pool = categoryFilter ? WORD_BANK.filter(w => w.category === categoryFilter) : WORD_BANK;
+  const effectivePool = pool.length >= 5 ? pool : WORD_BANK;
+  
+  let candidates = effectivePool.filter(
     w => !roomUsedLower.has(w.word.toLowerCase()) && !globalRecentLower.has(w.word.toLowerCase())
   );
-
-  // 2. Second priority: if fresh global words run low, pick any word not yet used in THIS room
   if (candidates.length === 0) {
-    candidates = WORD_BANK.filter(
-      w => !roomUsedLower.has(w.word.toLowerCase())
-    );
+    candidates = effectivePool.filter(w => !roomUsedLower.has(w.word.toLowerCase()));
   }
-
-  // 3. Fallback: if the room has exhausted words, reset room pool
   if (candidates.length === 0) {
     roomUsedWords.clear();
-    candidates = WORD_BANK.filter(w => !globalRecentLower.has(w.word.toLowerCase()));
-    if (candidates.length === 0) {
-      candidates = WORD_BANK;
-    }
+    candidates = effectivePool.filter(w => !globalRecentLower.has(w.word.toLowerCase()));
+    if (candidates.length === 0) candidates = effectivePool;
   }
-
-  // Pick randomly from eligible candidates
-  const randomIndex = Math.floor(Math.random() * candidates.length);
-  const selected = candidates[randomIndex];
-
-  // Record in room history
+  
+  const selected = candidates[Math.floor(Math.random() * candidates.length)];
   roomUsedWords.add(selected.word);
-
-  // Record in global recent history FIFO
   globalRecentWords.push(selected.word);
-  if (globalRecentWords.length > MAX_GLOBAL_RECENT) {
-    globalRecentWords.shift();
-  }
-
+  if (globalRecentWords.length > MAX_GLOBAL_RECENT) globalRecentWords.shift();
   return selected;
 }

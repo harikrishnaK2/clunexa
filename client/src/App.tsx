@@ -7,6 +7,7 @@ import { ClueSubmissionView, GuesserWaitingView } from './components/views/ClueS
 import { ClueRevealView } from './components/views/ClueRevealView';
 import { GuessingView, GuesserWatchingView } from './components/views/GuessingView';
 import { RoundResultView, GameOverView } from './components/views/ResultViews';
+import { EmojiOverlay, EmojiBar } from './components/ui/EmojiOverlay';
 
 function RoundIntroView({
   roundNumber,
@@ -97,8 +98,9 @@ function ExitConfirmModal({
 }
 
 function App() {
-  const { gameState, timeRemaining, connectionState, errorMessage, isJoining, actions } = useSocketGame();
+  const { gameState, timeRemaining, connectionState, errorMessage, isJoining, emojiBursts, actions } = useSocketGame();
   const [showExitConfirm, setShowExitConfirm] = React.useState(false);
+  const [muted, setMuted] = React.useState(false);
 
   const renderView = () => {
     if (!gameState) {
@@ -177,18 +179,35 @@ function App() {
               Room {gameState.roomCode}
             </span>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowExitConfirm(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-alt/80 hover:bg-crimson-clash/20 border border-white/10 hover:border-crimson-clash/40 text-muted hover:text-crimson-clash text-xs font-semibold transition-all active:scale-95 shadow-sm"
-            title="Exit Game"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-            <span>Exit Game</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                actions.toggleSound();
+                setMuted(!muted);
+              }}
+              className="text-xl hover:scale-110 active:scale-95 transition-all"
+              title={muted ? 'Unmute' : 'Mute'}
+            >
+              {muted ? '🔇' : '🔊'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowExitConfirm(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-alt/80 hover:bg-crimson-clash/20 border border-white/10 hover:border-crimson-clash/40 text-muted hover:text-crimson-clash text-xs font-semibold transition-all active:scale-95 shadow-sm"
+              title="Exit Game"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              <span>Exit Game</span>
+            </button>
+          </div>
         </header>
+      )}
+
+      {gameState && <EmojiOverlay bursts={emojiBursts} />}
+      {gameState && !['LOBBY', 'GAME_OVER'].includes(gameState.phase) && (
+        <EmojiBar onSend={actions.sendEmoji} />
       )}
 
       {/* Confirmation Modal */}
@@ -201,7 +220,7 @@ function App() {
         }}
       />
 
-      <div className={`min-h-screen bg-void text-ink overflow-x-hidden ${gameState ? 'pt-12' : ''}`}>
+      <div className={`min-h-screen bg-void text-ink overflow-x-hidden ${gameState ? 'pt-12 pb-16' : ''}`}>
         {renderView()}
       </div>
     </>

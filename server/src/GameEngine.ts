@@ -29,6 +29,7 @@ export interface PlayerGuess {
   playerName: string;
   guess: string;
   isCorrect: boolean;
+  guessTimeMs: number;
 }
 
 export interface Room {
@@ -46,6 +47,7 @@ export interface Room {
   clueGiverIndex: number;
   secretWord: string;
   category: string;
+  categoryFilter: string;
   clue: string | null;
   clues: Map<string, ClueSubmission>;
   guesses: Map<string, PlayerGuess>;
@@ -53,6 +55,8 @@ export interface Room {
   isCorrect: boolean | null;
   scoreDeltas: Record<string, number> | null;
   usedWords: Set<string>;
+  guessingStartTime: number;
+  streak: Map<string, number>;
   timerHandle: ReturnType<typeof setInterval> | null;
   timeRemaining: number;
   clueGiverOrder: string[];
@@ -86,10 +90,12 @@ export interface ClientGameState {
   guesserId: string;
   guesserName: string;
   category: string;
+  categoryFilter: string;
   /** null when receiver is NOT the clue giver during active play */
   secretWord: string | null;
   clue: string | null;
   timeRemaining: number;
+  streaks: Record<string, number>;
   submissionProgress: {
     total: number;
     submitted: number;
@@ -219,9 +225,11 @@ export function buildClientState(room: Room, forPlayerId: string): ClientGameSta
     guesserId: clueGiverId,
     guesserName: clueGiverPlayer?.name ?? '',
     category: room.category ?? '',
+    categoryFilter: room.categoryFilter ?? 'All Mix',
     secretWord,
     clue: visibleClue,
     timeRemaining: room.timeRemaining,
+    streaks: Object.fromEntries(room.streak || new Map()),
     submissionProgress: {
       total: 1,
       submitted: isClueSubmitted ? 1 : 0,
