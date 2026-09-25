@@ -57,13 +57,36 @@ export const GuessingView = ({
         <p className="text-muted text-xs">Clue given by {clueGiverName}</p>
       </div>
 
-      {/* Clue card hero */}
-      <div className="bg-surface border-2 border-emerald-alive/80 rounded-2xl p-6 text-center shadow-xl shadow-emerald-alive/15 mb-6 animate-slide-up">
-        <p className="text-xs uppercase tracking-widest text-emerald-alive font-bold mb-2">
-          The Clue
-        </p>
-        <div className="font-display text-4xl md:text-5xl font-bold uppercase tracking-wider text-ink my-1">
-          {clueWord}
+      {/* Dynamically-sized Clue card that adjusts to the size of the word */}
+      <div className="flex justify-center mb-6 w-full">
+        <div
+          className={`bg-surface border-2 border-emerald-alive/80 rounded-2xl shadow-xl shadow-emerald-alive/15 animate-slide-up inline-flex flex-col items-center justify-center max-w-full text-center transition-all duration-300 ${
+            clueWord.length > 12
+              ? 'px-4 py-4 w-full'
+              : clueWord.length > 7
+              ? 'px-8 py-5 w-auto'
+              : 'px-10 py-5 w-auto'
+          }`}
+        >
+          <div className="inline-flex items-center gap-1.5 mb-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-alive animate-pulse" />
+            <p className="text-[11px] uppercase tracking-widest text-emerald-alive font-bold">
+              The Clue
+            </p>
+          </div>
+          <div
+            className={`font-display font-bold uppercase text-ink break-words break-all max-w-full my-1 leading-tight ${
+              clueWord.length > 15
+                ? 'text-xl sm:text-2xl tracking-normal'
+                : clueWord.length > 11
+                ? 'text-2xl sm:text-3xl tracking-wide'
+                : clueWord.length > 7
+                ? 'text-3xl sm:text-4xl tracking-wider'
+                : 'text-4xl sm:text-5xl tracking-widest'
+            }`}
+          >
+            {clueWord}
+          </div>
         </div>
       </div>
 

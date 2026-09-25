@@ -422,6 +422,45 @@ io.on('connection', (socket) => {
     }
   });
 
+  function handlePlayerDeparture(room: GE.Room, playerId: string) {
+    const connectedCount = Array.from(room.players.values()).filter(p => p.connected).length;
+    if (connectedCount === 0) {
+      timerManager.clearTimer(room);
+      return;
+    }
+
+    // If mid-game and the clue giver left/disconnected, advance the round or end game
+    if (room.phase !== 'LOBBY' && room.phase !== 'GAME_OVER') {
+      const order = room.clueGiverOrder.length > 0 ? room.clueGiverOrder : room.guesserOrder;
+      const clueGiverId = order[room.clueGiverIndex];
+      if (clueGiverId === playerId) {
+        timerManager.clearTimer(room);
+        if (room.roundNumber < room.totalRounds) {
+          room.roundNumber++;
+          startRound(room);
+          return;
+        } else {
+          room.phase = 'GAME_OVER';
+          broadcastState(room);
+          return;
+        }
+      }
+
+      // If guessers left during GUESSING, check if remaining submitted
+      if (room.phase === 'GUESSING') {
+        const remainingGuessers = Array.from(room.players.values()).filter(
+          p => p.connected && p.id !== clueGiverId
+        );
+        if (remainingGuessers.length === 0 || room.guesses.size >= remainingGuessers.length) {
+          endGuessing(room);
+          return;
+        }
+      }
+    }
+
+    broadcastState(room);
+  }
+
   // ── leave_room ───────────────────────────────────────────────────────────
   socket.on('leave_room', () => {
     try {
@@ -440,12 +479,7 @@ io.on('connection', (socket) => {
         RM.removePlayer(roomToLeave, pid);
       }
 
-      const connectedCount = Array.from(roomToLeave.players.values()).filter(p => p.connected).length;
-      if (connectedCount === 0) {
-        timerManager.clearTimer(roomToLeave);
-      } else {
-        broadcastState(roomToLeave);
-      }
+      handlePlayerDeparture(roomToLeave, pid);
     } catch (err) {
       // ignore
     }
@@ -455,46 +489,11 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     if (!currentRoom || !currentPlayerId) return;
 
-    RM.removePlayer(currentRoom, currentPlayerId);
+    const roomToLeave = currentRoom;
+    const pid = currentPlayerId;
 
-    const connectedCount = Array.from(currentRoom.players.values()).filter(p => p.connected).length;
-
-    if (connectedCount === 0) {
-      // All gone — clean up timer
-      timerManager.clearTimer(currentRoom);
-      return;
-    }
-
-    // If mid-game and the clue giver disconnected, skip the round
-    if (currentRoom.phase !== 'LOBBY' && currentRoom.phase !== 'GAME_OVER') {
-      const order = currentRoom.clueGiverOrder.length > 0 ? currentRoom.clueGiverOrder : currentRoom.guesserOrder;
-      const clueGiverId = order[currentRoom.clueGiverIndex];
-      if (clueGiverId === currentPlayerId) {
-        timerManager.clearTimer(currentRoom);
-        if (currentRoom.roundNumber < currentRoom.totalRounds) {
-          currentRoom.roundNumber++;
-          startRound(currentRoom);
-          return;
-        } else {
-          currentRoom.phase = 'GAME_OVER';
-          broadcastState(currentRoom);
-          return;
-        }
-      }
-
-      // If guessers disconnected during guessing, check if remaining submitted
-      if (currentRoom.phase === 'GUESSING') {
-        const remainingGuessers = Array.from(currentRoom.players.values()).filter(
-          p => p.connected && p.id !== clueGiverId
-        );
-        if (remainingGuessers.length === 0 || currentRoom.guesses.size >= remainingGuessers.length) {
-          endGuessing(currentRoom);
-          return;
-        }
-      }
-    }
-
-    broadcastState(currentRoom);
+    RM.removePlayer(roomToLeave, pid);
+    handlePlayerDeparture(roomToLeave, pid);
   });
 });
 
