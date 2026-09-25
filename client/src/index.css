@@ -9,6 +9,9 @@
 
   html {
     height: 100%;
+    cursor: default;
+    user-select: none;
+    -webkit-user-select: none;
   }
 
   body {
@@ -21,11 +24,39 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overflow-x: hidden;
+    cursor: default;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
   }
 
   #root {
     min-height: 100vh;
     min-height: 100dvh;
+    cursor: default;
+  }
+
+  /* Prevent text I-beam cursor and caret selection on all non-input elements */
+  div, p, span, h1, h2, h3, h4, h5, h6, label, section, article, header, footer, main, ul, ol, li, table, tr, td, th {
+    cursor: default;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  /* Clickable interactive elements */
+  button, a, [role="button"], button *, a *, [role="button"] * {
+    cursor: pointer;
+  }
+
+  button:disabled, button:disabled * {
+    cursor: not-allowed;
+  }
+
+  /* Text fields: ONLY here is the text cursor (|) and text selection permitted */
+  input, textarea, [contenteditable="true"] {
+    cursor: text !important;
+    user-select: text !important;
+    -webkit-user-select: text !important;
   }
 
   /* Custom scrollbar */
