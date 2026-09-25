@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { ClientGameState } from '../../types/game';
 import { GameActions } from '../../hooks/useSocketGame';
 import { PlayerAvatar } from '../ui/Global';

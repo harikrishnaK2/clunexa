@@ -1,10 +1,10 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { ClientGameState } from '../../types/game';
 import { GameActions } from '../../hooks/useSocketGame';
 import { RadialTimer } from '../ui/Global';
 import { sounds } from '../../utils/sounds';
 
-// â”€â”€â”€ Guesser's View (All non-clue-giver players) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ───────────────────────────────────────────────────────────
 
 export const GuessingView = ({
   gameState,
@@ -103,7 +103,7 @@ export const GuessingView = ({
               const clean = e.target.value.replace(/[^a-zA-Z\s]/g, '');
               setGuess(clean);
             }}
-            placeholder="Type your guessâ€¦"
+            placeholder="Type your guess..."
             autoFocus
             autoComplete="off"
             className="bg-surface-alt border border-white/10 text-ink rounded-xl px-5 py-5 focus:outline-none focus:border-cyan-glow/60 focus:ring-2 focus:ring-cyan-glow/20 w-full text-center text-3xl font-display font-bold uppercase tracking-wider transition-all duration-150 placeholder:text-white/20 placeholder:font-normal placeholder:text-xl placeholder:tracking-normal"
@@ -113,7 +113,7 @@ export const GuessingView = ({
             disabled={!guess.trim()}
             className="py-5 font-display font-bold text-xl rounded-xl transition-all duration-200 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed bg-cyan-glow hover:bg-cyan-glow/80 text-void shadow-lg shadow-cyan-glow/30"
           >
-            Submit Guess â†’
+            Submit Guess →
           </button>
           <p className="text-center text-muted text-xs">
             Press Enter or click Submit to lock in your answer
@@ -121,9 +121,9 @@ export const GuessingView = ({
         </form>
       ) : (
         <div className="bg-surface border border-brand/20 rounded-2xl p-8 text-center mt-auto animate-score-pop">
-          <div className="text-4xl mb-3">âœ“</div>
+          <div className="text-4xl mb-3 text-emerald-alive">✓</div>
           <h3 className="font-display text-xl font-bold text-cyan-glow">Guess Locked In!</h3>
-          <p className="text-muted text-sm mt-2">Waiting for other players to submit their guessesâ€¦</p>
+          <p className="text-muted text-sm mt-2">Waiting for other players to submit their guesses...</p>
         </div>
       )}
 
@@ -137,7 +137,7 @@ export const GuessingView = ({
   );
 };
 
-// â”€â”€â”€ Clue Typer View (Watching players guess) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ───────────────────────────────────────────────────────────
 
 export const GuesserWatchingView = ({
   gameState,
@@ -202,7 +202,7 @@ export const GuesserWatchingView = ({
           />
         </div>
         <p className="text-xs text-muted mt-3">
-          â­ The more players guess correctly, the more points you earn (up to 50 pts)!
+          ⭐ The more players guess correctly, the more points you earn (up to 50 pts)!
         </p>
       </div>
     </div>

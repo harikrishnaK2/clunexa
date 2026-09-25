@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { useSocketGame } from './hooks/useSocketGame';
 import { ErrorToast, ConnectionBanner } from './components/ui/Global';
 import { LandingView } from './components/views/LandingView';
@@ -181,14 +181,31 @@ function App() {
           </div>
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={() => {
                 actions.toggleSound();
                 setMuted(!muted);
               }}
-              className="text-xl hover:scale-110 active:scale-95 transition-all"
-              title={muted ? 'Unmute' : 'Mute'}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-surface-alt/80 hover:bg-white/10 border border-white/10 text-xs font-semibold transition-all active:scale-95"
+              title={muted ? 'Unmute Sound' : 'Mute Sound'}
+              aria-label={muted ? 'Unmute Sound' : 'Mute Sound'}
             >
-              {muted ? 'ðŸ”‡' : 'ðŸ”Š'}
+              {muted ? (
+                <>
+                  <svg className="w-3.5 h-3.5 text-crimson-clash" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                  </svg>
+                  <span className="text-crimson-clash text-xs font-medium">Muted</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-3.5 h-3.5 text-brand-light" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                  </svg>
+                  <span className="text-muted text-xs font-medium">Sound</span>
+                </>
+              )}
             </button>
             <button
               type="button"

@@ -1,4 +1,4 @@
-﻿import React, { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { ClientGameState } from '../../types/game';
 import { GameActions } from '../../hooks/useSocketGame';
 import { PlayerAvatar } from '../ui/Global';

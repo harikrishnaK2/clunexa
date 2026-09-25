@@ -1,4 +1,4 @@
-﻿class SoundManager {
+class SoundManager {
   private ctx: AudioContext | null = null;
   private muted = false;
 

@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { ClientGameState } from '../types/game';
 import { sounds } from '../utils/sounds';
@@ -127,7 +127,7 @@ export function useSocketGame() {
   const emit = useCallback((event: string, data?: unknown) => {
     const s = socketRef.current;
     if (!s) { setErrorMessage('Not connected to server. Please refresh.'); return false; }
-    if (!s.connected) { setErrorMessage('Connection lost. Reconnectingâ€¦'); return false; }
+    if (!s.connected) { setErrorMessage('Connection lost. Reconnecting...'); return false; }
     if (data !== undefined) s.emit(event, data);
     else s.emit(event);
     return true;
@@ -181,7 +181,7 @@ export function useSocketGame() {
       const url = `${window.location.origin}?room=${gameState.roomCode}`;
       navigator.clipboard.writeText(url)
         .then(() => {
-          setErrorMessage('ðŸ”— Link copied!');
+          setErrorMessage('🔗 Link copied!');
           setTimeout(() => setErrorMessage(null), 2500);
         })
         .catch(() => {
