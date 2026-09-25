@@ -30,8 +30,22 @@ export const LobbyView = ({
 
   return (
     <div className="min-h-screen p-4 max-w-lg mx-auto flex flex-col gap-6 animate-fade-in">
+      {/* Top navigation bar */}
+      <div className="flex items-center justify-between pt-2">
+        <button
+          onClick={actions.leaveRoom}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/10 text-muted hover:text-ink hover:border-white/20 text-xs font-semibold transition-all duration-150 active:scale-95 bg-surface-alt/50"
+        >
+          <span>←</span>
+          <span>Exit Room</span>
+        </button>
+        <span className="text-xs font-bold uppercase tracking-wider text-brand-light bg-brand/10 border border-brand/20 px-3 py-1 rounded-full">
+          Lobby
+        </span>
+      </div>
+
       {/* Room code hero */}
-      <div className="text-center pt-10 pb-2">
+      <div className="text-center pt-4 pb-2">
         <p className="text-xs font-semibold uppercase tracking-widest text-muted mb-2">Share this code</p>
         <div className="font-mono text-6xl md:text-7xl font-bold tracking-[0.3em] text-brand-light mb-4">
           {gameState.roomCode}
@@ -135,6 +149,16 @@ export const LobbyView = ({
           </button>
         </div>
       )}
+
+      {/* Leave room secondary option */}
+      <div className="text-center pb-6 -mt-2">
+        <button
+          onClick={actions.leaveRoom}
+          className="text-xs text-muted hover:text-crimson-clash font-semibold transition-colors underline underline-offset-4"
+        >
+          Exit Room (back to create/join)
+        </button>
+      </div>
     </div>
   );
 };

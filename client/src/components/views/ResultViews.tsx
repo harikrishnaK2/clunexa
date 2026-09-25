@@ -238,13 +238,7 @@ export const GameOverView = ({
             Play Again 🔄
           </button>
           <button
-            onClick={() => {
-              sessionStorage.removeItem('clunexa-room');
-              sessionStorage.removeItem('clunexa-token');
-              sessionStorage.removeItem('clue-clash-room');
-              sessionStorage.removeItem('clue-clash-token');
-              window.location.reload();
-            }}
+            onClick={actions.leaveRoom}
             className="w-full py-3 font-semibold text-base rounded-xl transition-all duration-200 border border-white/10 text-muted hover:text-ink hover:border-white/20"
           >
             Leave Game
@@ -254,13 +248,7 @@ export const GameOverView = ({
         <div className="text-center">
           <p className="text-muted font-semibold">Waiting for host to play again…</p>
           <button
-            onClick={() => {
-              sessionStorage.removeItem('clunexa-room');
-              sessionStorage.removeItem('clunexa-token');
-              sessionStorage.removeItem('clue-clash-room');
-              sessionStorage.removeItem('clue-clash-token');
-              window.location.reload();
-            }}
+            onClick={actions.leaveRoom}
             className="mt-4 px-6 py-2 font-semibold text-sm rounded-xl border border-white/10 text-muted hover:text-ink transition-colors"
           >
             Leave Game

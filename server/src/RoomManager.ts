@@ -87,6 +87,31 @@ export function addPlayer(room: Room, socketId: string, name: string, token: str
   return player;
 }
 
+export function deletePlayer(room: Room, socketId: string): void {
+  const player = room.players.get(socketId);
+  if (!player) return;
+
+  room.players.delete(socketId);
+  const orderIdx = room.guesserOrder.indexOf(socketId);
+  if (orderIdx !== -1) {
+    room.guesserOrder.splice(orderIdx, 1);
+  }
+
+  // If was host, promote next connected player
+  if (room.hostId === socketId) {
+    const nextHost = Array.from(room.players.values()).find(p => p.connected);
+    if (nextHost) {
+      room.hostId = nextHost.id;
+      nextHost.isHost = true;
+    }
+  }
+
+  // If no players remain, delete the room
+  if (room.players.size === 0) {
+    rooms.delete(room.code);
+  }
+}
+
 export function removePlayer(room: Room, socketId: string): void {
   const player = room.players.get(socketId);
   if (player) {

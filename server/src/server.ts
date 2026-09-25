@@ -376,6 +376,35 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ── leave_room ───────────────────────────────────────────────────────────
+  socket.on('leave_room', () => {
+    try {
+      if (!currentRoom || !currentPlayerId) return;
+
+      const roomToLeave = currentRoom;
+      const pid = currentPlayerId;
+
+      socket.leave(roomToLeave.code);
+      currentRoom = null;
+      currentPlayerId = null;
+
+      if (roomToLeave.phase === 'LOBBY' || roomToLeave.phase === 'GAME_OVER') {
+        RM.deletePlayer(roomToLeave, pid);
+      } else {
+        RM.removePlayer(roomToLeave, pid);
+      }
+
+      const connectedCount = Array.from(roomToLeave.players.values()).filter(p => p.connected).length;
+      if (connectedCount === 0) {
+        timerManager.clearTimer(roomToLeave);
+      } else {
+        broadcastState(roomToLeave);
+      }
+    } catch (err) {
+      // ignore
+    }
+  });
+
   // ── disconnect ───────────────────────────────────────────────────────────
   socket.on('disconnect', () => {
     if (!currentRoom || !currentPlayerId) return;

@@ -27,6 +27,7 @@ export interface GameActions {
   submitGuess: (guess: string) => void;
   playAgain: () => void;
   copyRoomLink: () => void;
+  leaveRoom: () => void;
 }
 
 export function useSocketGame() {
@@ -186,6 +187,19 @@ export function useSocketGame() {
     }
   }, [gameState]);
 
+  const leaveRoom = useCallback(() => {
+    emit('leave_room');
+    sessionStorage.removeItem('clunexa-room');
+    sessionStorage.removeItem('clunexa-token');
+    sessionStorage.removeItem('clue-clash-room');
+    sessionStorage.removeItem('clue-clash-token');
+    if (window.location.search) {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+    setGameState(null);
+    setIsJoining(false);
+  }, [emit]);
+
   return {
     gameState,
     timeRemaining,
@@ -200,6 +214,7 @@ export function useSocketGame() {
       submitGuess,
       playAgain,
       copyRoomLink,
+      leaveRoom,
     },
     socket,
     clearError: useCallback(() => setErrorMessage(null), []),
