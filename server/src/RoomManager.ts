@@ -25,17 +25,21 @@ export function createRoom(hostId: string, hostName: string, hostToken: string):
     settings: { roundsPerPlayer: 1, submissionTimeSec: 45, guessTimeSec: 30 },
     roundNumber: 0,
     totalRounds: 0,
-    guesserIndex: -1,
+    clueGiverIndex: -1,
     secretWord: '',
     category: '',
+    clue: null,
     clues: new Map(),
+    guesses: new Map(),
     guess: null,
     isCorrect: null,
     scoreDeltas: null,
     usedWords: new Set<string>(),
     timerHandle: null,
     timeRemaining: 0,
-    guesserOrder: []
+    clueGiverOrder: [],
+    guesserOrder: [],
+    guesserIndex: -1,
   };
   const validHostToken = (hostToken && hostToken.trim().length > 0) ? hostToken.trim() : uuidv4();
   addPlayer(room, hostId, hostName, validHostToken);
@@ -82,6 +86,7 @@ export function addPlayer(room: Room, socketId: string, name: string, token: str
   };
   room.players.set(socketId, player);
   if (room.phase === 'LOBBY') {
+    room.clueGiverOrder.push(socketId);
     room.guesserOrder.push(socketId);
   }
   return player;
@@ -92,10 +97,10 @@ export function deletePlayer(room: Room, socketId: string): void {
   if (!player) return;
 
   room.players.delete(socketId);
+  const cgIdx = room.clueGiverOrder.indexOf(socketId);
+  if (cgIdx !== -1) room.clueGiverOrder.splice(cgIdx, 1);
   const orderIdx = room.guesserOrder.indexOf(socketId);
-  if (orderIdx !== -1) {
-    room.guesserOrder.splice(orderIdx, 1);
-  }
+  if (orderIdx !== -1) room.guesserOrder.splice(orderIdx, 1);
 
   // If was host, promote next connected player
   if (room.hostId === socketId) {

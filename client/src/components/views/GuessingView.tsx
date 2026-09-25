@@ -3,7 +3,7 @@ import { ClientGameState } from '../../types/game';
 import { GameActions } from '../../hooks/useSocketGame';
 import { RadialTimer } from '../ui/Global';
 
-// ─── Guesser's view ───────────────────────────────────────────────────────────
+// ─── Guesser's View (All non-clue-giver players) ─────────────────────────────
 
 export const GuessingView = ({
   gameState,
@@ -17,16 +17,21 @@ export const GuessingView = ({
   const [guess, setGuess] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
-  const uniqueClues = (gameState.clues ?? []).filter(c => !c.isDuplicate);
-  const allDuplicated = (gameState.clues ?? []).length > 0 && uniqueClues.length === 0;
+  const isAlreadySubmitted = submitted || gameState.hasGuessed;
+  const clueWord = gameState.clue || (gameState.clues && gameState.clues[0]?.rawClue) || '???';
+  const clueGiverName = gameState.clueGiverName || gameState.guesserName || 'Clue Typer';
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (guess.trim() && !submitted) {
-      actions.submitGuess(guess.trim());
+    const cleanGuess = guess.trim();
+    if (cleanGuess && !isAlreadySubmitted) {
+      actions.submitGuess(cleanGuess);
       setSubmitted(true);
     }
   };
+
+  const totalGuessers = gameState.guessProgress?.total ?? Math.max(1, gameState.players.length - 1);
+  const submittedGuessers = gameState.guessProgress?.submitted ?? (isAlreadySubmitted ? 1 : 0);
 
   return (
     <div className="min-h-screen p-4 max-w-lg mx-auto flex flex-col animate-fade-in">
@@ -38,58 +43,41 @@ export const GuessingView = ({
           </div>
           <div className="inline-flex items-center gap-2 bg-cyan-glow/15 border border-cyan-glow/30 rounded-full px-3 py-1">
             <div className="w-2 h-2 rounded-full bg-cyan-glow animate-pulse" />
-            <span className="text-cyan-glow text-xs font-bold uppercase tracking-wide">Your Guess</span>
+            <span className="text-cyan-glow text-xs font-bold uppercase tracking-wide">Guess the Word</span>
           </div>
         </div>
         <RadialTimer seconds={timeRemaining} maxSeconds={gameState.settings?.guessTimeSec ?? 30} />
       </div>
 
       {/* Category header */}
-      <div className="text-center mb-6">
-        <h2 className="font-display text-2xl md:text-3xl font-bold text-ink">
-          What's the secret word?
-        </h2>
-        <div className="inline-block mt-2 bg-surface-alt border border-white/10 rounded-full px-4 py-1 text-muted text-sm font-semibold">
-          Category: {gameState.category}
+      <div className="text-center mb-4">
+        <div className="inline-block bg-surface-alt border border-white/10 rounded-full px-4 py-1 text-muted text-xs font-semibold uppercase tracking-wider mb-2">
+          Category: <span className="text-ink font-bold">{gameState.category}</span>
+        </div>
+        <p className="text-muted text-xs">Clue given by {clueGiverName}</p>
+      </div>
+
+      {/* Clue card hero */}
+      <div className="bg-surface border-2 border-emerald-alive/80 rounded-2xl p-6 text-center shadow-xl shadow-emerald-alive/15 mb-6 animate-slide-up">
+        <p className="text-xs uppercase tracking-widest text-emerald-alive font-bold mb-2">
+          The Clue
+        </p>
+        <div className="font-display text-4xl md:text-5xl font-bold uppercase tracking-wider text-ink my-1">
+          {clueWord}
         </div>
       </div>
 
-      {/* Clue chips */}
-      <div className="mb-8">
-        {allDuplicated ? (
-          <div className="bg-crimson-clash/10 border-2 border-crimson-clash/40 rounded-2xl p-6 text-center">
-            <div className="text-4xl mb-3">💥</div>
-            <h3 className="font-display text-xl font-bold text-crimson-clash mb-1">All clues were duplicates!</h3>
-            <p className="text-muted text-sm">You're on your own for this one…</p>
-          </div>
-        ) : uniqueClues.length === 0 ? (
-          <div className="bg-surface border border-white/8 rounded-2xl p-6 text-center text-muted">
-            No clues available — waiting for reveal…
-          </div>
-        ) : (
-          <div className="flex flex-wrap justify-center gap-3">
-            {uniqueClues.map((c, i) => (
-              <div
-                key={i}
-                className="bg-surface border-2 border-emerald-alive/60 rounded-xl px-6 py-4 text-center shadow-lg shadow-emerald-alive/10 animate-slide-up"
-                style={{ animationDelay: `${i * 80}ms` }}
-              >
-                <div className="font-display text-2xl md:text-3xl font-bold uppercase text-ink tracking-wide">
-                  {c.rawClue}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Guess form */}
-      {!submitted ? (
+      {/* Guess form or locked-in state */}
+      {!isAlreadySubmitted ? (
         <form onSubmit={handleSubmit} className="flex flex-col gap-3 mt-auto">
           <input
             type="text"
             value={guess}
-            onChange={e => setGuess(e.target.value)}
+            onChange={e => {
+              // English letters and spaces only
+              const clean = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+              setGuess(clean);
+            }}
             placeholder="Type your guess…"
             autoFocus
             autoComplete="off"
@@ -107,17 +95,24 @@ export const GuessingView = ({
           </p>
         </form>
       ) : (
-        <div className="bg-surface border border-brand/20 rounded-2xl p-8 text-center mt-auto">
-          <div className="text-4xl mb-3">⏳</div>
-          <h3 className="font-display text-xl font-bold text-brand-light">Guess submitted!</h3>
-          <p className="text-muted text-sm mt-2">Waiting for the verdict…</p>
+        <div className="bg-surface border border-brand/20 rounded-2xl p-8 text-center mt-auto animate-score-pop">
+          <div className="text-4xl mb-3">✓</div>
+          <h3 className="font-display text-xl font-bold text-cyan-glow">Guess Locked In!</h3>
+          <p className="text-muted text-sm mt-2">Waiting for other players to submit their guesses…</p>
         </div>
       )}
+
+      {/* Live guess progress indicator */}
+      <div className="pt-6 pb-4 text-center">
+        <p className="text-xs text-muted">
+          <span className="text-ink font-bold">{submittedGuessers}</span> of {totalGuessers} players have guessed
+        </p>
+      </div>
     </div>
   );
 };
 
-// ─── Spectator view (clue givers watching the guesser) ───────────────────────
+// ─── Clue Typer View (Watching players guess) ─────────────────────────────────
 
 export const GuesserWatchingView = ({
   gameState,
@@ -126,59 +121,64 @@ export const GuesserWatchingView = ({
   gameState: ClientGameState;
   timeRemaining: number;
 }) => {
-  const uniqueClues = (gameState.clues ?? []).filter(c => !c.isDuplicate);
+  const clueWord = gameState.clue || (gameState.clues && gameState.clues[0]?.rawClue) || '???';
+  const totalGuessers = gameState.guessProgress?.total ?? Math.max(1, gameState.players.length - 1);
+  const submittedGuessers = gameState.guessProgress?.submitted ?? 0;
 
   return (
-    <div className="min-h-screen p-4 max-w-lg mx-auto flex flex-col animate-fade-in">
+    <div className="min-h-screen p-4 max-w-lg mx-auto flex flex-col animate-fade-in text-center">
       {/* Top bar */}
-      <div className="flex items-center justify-between pt-6 pb-8">
+      <div className="flex items-center justify-between pt-6 pb-6">
         <div>
           <div className="text-xs text-muted uppercase tracking-widest font-semibold mb-1">
             Round {gameState.roundNumber} / {gameState.totalRounds}
           </div>
-          <div className="inline-flex items-center gap-2 bg-surface-alt border border-white/10 rounded-full px-3 py-1">
-            <span className="text-muted text-xs font-bold uppercase tracking-wide">Watching</span>
+          <div className="inline-flex items-center gap-2 bg-brand/15 border border-brand/30 rounded-full px-3 py-1">
+            <span className="text-brand-light text-xs font-bold uppercase tracking-wide">Clue Typer</span>
           </div>
         </div>
         <RadialTimer seconds={timeRemaining} maxSeconds={gameState.settings?.guessTimeSec ?? 30} />
       </div>
 
-      <div className="text-center mb-8">
-        <div className="text-5xl mb-4">🤔</div>
-        <h2 className="font-display text-2xl md:text-3xl font-bold text-brand-light">
-          {gameState.guesserName} is thinking…
+      <div className="mb-6">
+        <h2 className="font-display text-3xl font-bold text-brand-light">
+          Players are guessing!
         </h2>
-        <p className="text-muted mt-2 text-sm">Category: <span className="text-ink">{gameState.category}</span></p>
+        <p className="text-muted mt-2 text-sm">
+          They're trying to deduce the secret word from your clue.
+        </p>
       </div>
 
-      {/* Surviving clues (visible to watchers too) */}
-      {uniqueClues.length > 0 ? (
-        <div className="flex flex-wrap justify-center gap-3">
-          {uniqueClues.map((c, i) => (
-            <div
-              key={i}
-              className="bg-surface border border-white/15 rounded-xl px-5 py-3 text-center"
-            >
-              <div className="font-display text-xl font-bold uppercase text-muted">{c.rawClue}</div>
-            </div>
-          ))}
+      {/* Secret Word & Clue summary card */}
+      <div className="bg-surface border border-white/10 rounded-2xl p-6 mb-8 text-left flex flex-col gap-4">
+        <div>
+          <span className="text-xs text-muted uppercase tracking-wider font-semibold block">Secret Word</span>
+          <span className="text-2xl font-display font-bold text-cyan-glow uppercase tracking-wide">
+            {gameState.secretWord}
+          </span>
         </div>
-      ) : (
-        <div className="bg-crimson-clash/10 border border-crimson-clash/30 rounded-2xl p-6 text-center">
-          <p className="text-crimson-clash font-bold">No clues survived — guesser is flying blind!</p>
+        <div className="border-t border-white/10 pt-3">
+          <span className="text-xs text-muted uppercase tracking-wider font-semibold block">Your Clue</span>
+          <span className="text-2xl font-display font-bold text-emerald-alive uppercase tracking-wide">
+            {clueWord}
+          </span>
         </div>
-      )}
+      </div>
 
-      <div className="flex justify-center mt-8">
-        <div className="flex gap-1">
-          {[0, 1, 2].map(i => (
-            <div
-              key={i}
-              className="w-2 h-2 rounded-full bg-brand-light animate-bounce"
-              style={{ animationDelay: `${i * 150}ms` }}
-            />
-          ))}
+      {/* Progress */}
+      <div className="mt-auto bg-surface-alt/50 border border-white/10 rounded-2xl p-6 mb-6">
+        <p className="text-sm font-semibold text-ink mb-3">
+          {submittedGuessers} of {totalGuessers} players have locked in their guess
+        </p>
+        <div className="w-full bg-surface rounded-full h-3 overflow-hidden border border-white/10">
+          <div
+            className="bg-gradient-to-r from-brand to-cyan-glow h-full transition-all duration-300"
+            style={{ width: `${totalGuessers > 0 ? (submittedGuessers / totalGuessers) * 100 : 0}%` }}
+          />
         </div>
+        <p className="text-xs text-muted mt-3">
+          ⭐ The more players guess correctly, the more points you earn (up to 50 pts)!
+        </p>
       </div>
     </div>
   );

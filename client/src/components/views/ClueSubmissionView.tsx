@@ -3,7 +3,7 @@ import { ClientGameState } from '../../types/game';
 import { GameActions } from '../../hooks/useSocketGame';
 import { RadialTimer } from '../ui/Global';
 
-// ─── Clue Submission (non-guesser) ───────────────────────────────────────────
+// ─── Clue Submission (Clue Typer only) ────────────────────────────────────────
 
 export const ClueSubmissionView = ({
   gameState,
@@ -18,21 +18,39 @@ export const ClueSubmissionView = ({
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [error, setError] = useState('');
 
-  const isAlreadySubmitted =
-    hasSubmitted || gameState.submissionProgress.submittedIds.includes(gameState.myId);
+  const isAlreadySubmitted = hasSubmitted || gameState.clue !== null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = clue.trim();
-    if (!trimmed) { setError('Please enter a clue.'); return; }
-    if (trimmed.includes(' ')) { setError('One word only — no spaces!'); return; }
-    if (trimmed.length > 20) { setError('Too long! Max 20 characters.'); return; }
+    if (!trimmed) {
+      setError('Please enter a clue.');
+      return;
+    }
+    if (trimmed.includes(' ')) {
+      setError('One word only — no spaces!');
+      return;
+    }
+    // Reject emojis or non-letters
+    if (!/^[a-zA-Z]+$/.test(trimmed)) {
+      setError('Letters only! No emojis, numbers, or symbols.');
+      return;
+    }
+    if (trimmed.length > 20) {
+      setError('Too long! Max 20 characters.');
+      return;
+    }
+    // Check if clue matches secret word (client-side validation prevents lock-out)
+    if (gameState.secretWord && trimmed.toUpperCase() === gameState.secretWord.toUpperCase()) {
+      setError('You cannot use the secret word as your clue! Try another word.');
+      // KEEP INPUT UNLOCKED so the user can immediately retype!
+      return;
+    }
+
     setError('');
     actions.submitClue(trimmed);
     setHasSubmitted(true);
   };
-
-  const { submitted, total } = gameState.submissionProgress;
 
   return (
     <div className="min-h-screen p-4 max-w-lg mx-auto flex flex-col animate-slide-up">
@@ -44,7 +62,7 @@ export const ClueSubmissionView = ({
           </div>
           <div className="inline-flex items-center gap-2 bg-brand/15 border border-brand/30 rounded-full px-3 py-1">
             <div className="w-2 h-2 rounded-full bg-brand-light animate-pulse" />
-            <span className="text-brand-light text-xs font-bold uppercase tracking-wide">Clue Giver</span>
+            <span className="text-brand-light text-xs font-bold uppercase tracking-wide">You are the Clue Typer</span>
           </div>
         </div>
         <RadialTimer seconds={timeRemaining} maxSeconds={gameState.settings?.submissionTimeSec ?? 45} />
@@ -60,7 +78,7 @@ export const ClueSubmissionView = ({
         </div>
         <div className="bg-amber-hot/10 border border-amber-hot/20 rounded-xl px-4 py-2 inline-block">
           <p className="text-amber-hot text-xs font-semibold">
-            ⚡ Submit ONE word · Don't copy others — it cancels out!
+            💡 Submit ONE clue to help other players guess this word!
           </p>
         </div>
       </div>
@@ -73,10 +91,12 @@ export const ClueSubmissionView = ({
               type="text"
               value={clue}
               onChange={e => {
-                setClue(e.target.value);
+                // Strictly block emojis, numbers, and symbols from being typed or pasted
+                const filtered = e.target.value.replace(/[^a-zA-Z]/g, '');
+                setClue(filtered);
                 setError('');
               }}
-              placeholder="Your clue word…"
+              placeholder="Type your clue…"
               maxLength={20}
               autoFocus
               autoComplete="off"
@@ -86,15 +106,23 @@ export const ClueSubmissionView = ({
               {clue.length}/20
             </div>
           </div>
+
+          <p className="text-muted/60 text-xs text-center font-medium">
+            Letters only · No emojis or spaces
+          </p>
+
           {error && (
-            <p className="text-crimson-clash text-sm text-center font-semibold animate-fade-in">{error}</p>
+            <div className="p-3 bg-crimson-clash/10 border border-crimson-clash/30 rounded-xl">
+              <p className="text-crimson-clash text-sm text-center font-semibold animate-fade-in">{error}</p>
+            </div>
           )}
+
           <button
             type="submit"
-            disabled={!clue.trim() || clue.includes(' ')}
-            className="py-5 font-display font-bold text-xl rounded-xl transition-all duration-200 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed bg-brand hover:bg-brand-light text-ink shadow-lg shadow-brand/30"
+            disabled={!clue.trim()}
+            className="py-5 font-display font-bold text-xl rounded-xl transition-all duration-200 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed bg-brand hover:bg-brand-light text-ink shadow-lg shadow-brand/30 mt-2"
           >
-            Lock In Clue →
+            Submit Clue →
           </button>
         </form>
       ) : (
@@ -102,32 +130,22 @@ export const ClueSubmissionView = ({
           <div className="w-16 h-16 bg-emerald-alive/20 text-emerald-alive rounded-full flex items-center justify-center text-3xl mx-auto mb-4">
             ✓
           </div>
-          <h3 className="font-display text-xl font-bold text-emerald-alive mb-2">Clue locked in!</h3>
-          <p className="text-muted">Waiting for others to submit…</p>
+          <h3 className="font-display text-xl font-bold text-emerald-alive mb-2">Clue Submitted!</h3>
+          <p className="text-muted">Revealing clue to other players…</p>
         </div>
       )}
 
-      {/* Submission progress dots */}
-      <div className="mt-auto pt-8 pb-6">
-        <p className="text-center text-sm text-muted mb-4">
-          <span className="text-ink font-semibold">{submitted}</span> of {total} clues submitted
+      {/* Scoring hint for clue giver */}
+      <div className="mt-auto pt-8 pb-4 text-center">
+        <p className="text-muted/70 text-xs">
+          ⭐ You earn up to <strong className="text-amber-hot">50 points</strong> based on how many players guess your clue correctly!
         </p>
-        <div className="flex justify-center gap-3">
-          {Array.from({ length: total }).map((_, i) => (
-            <div
-              key={i}
-              className={`w-3 h-3 rounded-full transition-all duration-500 ${
-                i < submitted ? 'bg-emerald-alive scale-110' : 'bg-white/10'
-              }`}
-            />
-          ))}
-        </div>
       </div>
     </div>
   );
 };
 
-// ─── Guesser waiting (during clue submission) ─────────────────────────────────
+// ─── Guesser waiting (while Clue Typer is typing) ─────────────────────────────
 
 export const GuesserWaitingView = ({
   gameState,
@@ -136,24 +154,24 @@ export const GuesserWaitingView = ({
   gameState: ClientGameState;
   timeRemaining: number;
 }) => {
-  const { submitted, total } = gameState.submissionProgress;
+  const clueGiverName = gameState.clueGiverName || gameState.guesserName || 'The Clue Typer';
 
   return (
     <div className="min-h-screen p-4 max-w-lg mx-auto flex flex-col items-center justify-center animate-fade-in text-center">
       {/* Role badge */}
       <div className="inline-flex items-center gap-2 bg-cyan-glow/15 border border-cyan-glow/30 rounded-full px-4 py-1.5 mb-8">
         <div className="w-2 h-2 rounded-full bg-cyan-glow animate-pulse" />
-        <span className="text-cyan-glow text-xs font-bold uppercase tracking-wide">You are the Guesser</span>
+        <span className="text-cyan-glow text-xs font-bold uppercase tracking-wide">You are Guessing</span>
       </div>
 
       <RadialTimer seconds={timeRemaining} maxSeconds={gameState.settings?.submissionTimeSec ?? 45} />
 
       <div className="mt-10 mb-4">
         <h2 className="font-display text-3xl md:text-4xl font-bold text-brand-light">
-          Your friends are plotting…
+          {clueGiverName} is typing a clue…
         </h2>
         <p className="text-muted mt-3 text-lg">
-          They're crafting clues for a <span className="text-ink font-semibold">{gameState.category}</span> word.
+          The category is <span className="text-ink font-semibold">{gameState.category}</span>.
         </p>
       </div>
 
@@ -162,24 +180,13 @@ export const GuesserWaitingView = ({
         <div className="absolute inset-0 rounded-full border-2 border-brand/20 animate-ping" style={{ animationDuration: '2s' }} />
         <div className="absolute inset-4 rounded-full border-2 border-brand/30 animate-ping" style={{ animationDuration: '2s', animationDelay: '0.5s' }} />
         <div className="absolute inset-8 rounded-full bg-brand/20 border border-brand/40 flex items-center justify-center">
-          <span className="text-2xl">👁</span>
+          <span className="text-2xl">✍️</span>
         </div>
       </div>
 
-      <p className="text-sm text-muted mb-4">
-        <span className="text-ink font-semibold">{submitted}</span> of {total} clues submitted
+      <p className="text-sm text-muted mb-2">
+        Get ready to guess the secret word once the clue is revealed!
       </p>
-      <div className="flex justify-center gap-3">
-        {Array.from({ length: total }).map((_, i) => (
-          <div
-            key={i}
-            className={`w-3 h-3 rounded-full transition-all duration-500 ${
-              i < submitted ? 'bg-brand-light scale-110' : 'bg-white/10 animate-pulse'
-            }`}
-            style={{ animationDelay: `${i * 200}ms` }}
-          />
-        ))}
-      </div>
     </div>
   );
 };

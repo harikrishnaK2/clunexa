@@ -22,29 +22,43 @@ export interface ClientGameState {
   isHost: boolean;
   roundNumber: number;
   totalRounds: number;
+  clueGiverId: string;
+  clueGiverName: string;
+  isClueGiver: boolean;
+  isGuesser: boolean;
+  // Aliases for compatibility
   guesserId: string;
   guesserName: string;
-  isGuesser: boolean;
   category: string;
-  /** null if receiver IS guesser and phase is not ROUND_RESULT / GAME_OVER */
+  /** null when receiver is NOT the clue giver during active play */
   secretWord: string | null;
+  clue: string | null;
   timeRemaining: number;
   submissionProgress: {
     total: number;
     submitted: number;
     submittedIds: string[];
   };
-  /** null until CLUE_REVEAL begins */
   clues: Array<{
     playerId: string;
     playerName: string;
     rawClue: string;
     isDuplicate: boolean;
   }> | null;
+  guesses: Array<{
+    playerId: string;
+    playerName: string;
+    guess: string;
+    isCorrect: boolean;
+  }> | null;
+  hasGuessed: boolean;
+  guessProgress: {
+    total: number;
+    submitted: number;
+  };
   guess: string | null;
   isCorrect: boolean | null;
   scoreDeltas: Record<string, number> | null;
-  /** Room settings reflected from server */
   settings?: {
     submissionTimeSec: number;
     guessTimeSec: number;

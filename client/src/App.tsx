@@ -8,11 +8,16 @@ import { ClueRevealView } from './components/views/ClueRevealView';
 import { GuessingView, GuesserWatchingView } from './components/views/GuessingView';
 import { RoundResultView, GameOverView } from './components/views/ResultViews';
 
-function RoundIntroView({ roundNumber, totalRounds, guesserName, isGuesser }: {
+function RoundIntroView({
+  roundNumber,
+  totalRounds,
+  clueGiverName,
+  isClueGiver,
+}: {
   roundNumber: number;
   totalRounds: number;
-  guesserName: string;
-  isGuesser: boolean;
+  clueGiverName: string;
+  isClueGiver: boolean;
 }) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-void text-center p-4">
@@ -24,18 +29,18 @@ function RoundIntroView({ roundNumber, totalRounds, guesserName, isGuesser }: {
           {roundNumber}
         </h1>
         <div className="mt-6 text-xl font-semibold text-ink">
-          {isGuesser ? (
-            <span className="text-cyan-glow">You are the <strong>Guesser</strong> this round!</span>
+          {isClueGiver ? (
+            <span className="text-amber-hot">You are the <strong>Clue Typer</strong> this round!</span>
           ) : (
             <span>
-              <strong className="text-cyan-glow">{guesserName}</strong> is the Guesser
+              <strong className="text-amber-hot">{clueGiverName || 'Clue Typer'}</strong> is the Clue Typer
             </span>
           )}
         </div>
         <p className="text-muted text-sm mt-3">
-          {isGuesser
-            ? "Get ready to decode your friends' clues…"
-            : "Get ready to submit your best clue…"}
+          {isClueGiver
+            ? "You'll see the secret word. Give one single-word clue for everyone to guess!"
+            : "Wait for the clue, then race to guess the secret word!"}
         </p>
       </div>
     </div>
@@ -65,23 +70,23 @@ function App() {
           <RoundIntroView
             roundNumber={gameState.roundNumber}
             totalRounds={gameState.totalRounds}
-            guesserName={gameState.guesserName}
-            isGuesser={gameState.isGuesser}
+            clueGiverName={gameState.clueGiverName}
+            isClueGiver={gameState.isClueGiver}
           />
         );
 
       case 'CLUE_SUBMISSION':
-        return gameState.isGuesser
-          ? <GuesserWaitingView gameState={gameState} timeRemaining={timeRemaining} />
-          : <ClueSubmissionView gameState={gameState} actions={actions} timeRemaining={timeRemaining} />;
+        return gameState.isClueGiver
+          ? <ClueSubmissionView gameState={gameState} actions={actions} timeRemaining={timeRemaining} />
+          : <GuesserWaitingView gameState={gameState} timeRemaining={timeRemaining} />;
 
       case 'CLUE_REVEAL':
         return <ClueRevealView gameState={gameState} />;
 
       case 'GUESSING':
-        return gameState.isGuesser
-          ? <GuessingView gameState={gameState} actions={actions} timeRemaining={timeRemaining} />
-          : <GuesserWatchingView gameState={gameState} timeRemaining={timeRemaining} />;
+        return gameState.isClueGiver
+          ? <GuesserWatchingView gameState={gameState} timeRemaining={timeRemaining} />
+          : <GuessingView gameState={gameState} actions={actions} timeRemaining={timeRemaining} />;
 
       case 'ROUND_RESULT':
         return <RoundResultView gameState={gameState} />;

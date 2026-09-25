@@ -7,113 +7,141 @@ import confetti from 'canvas-confetti';
 // ─── Round Result ─────────────────────────────────────────────────────────────
 
 export const RoundResultView = ({ gameState }: { gameState: ClientGameState }) => {
-  const isCorrect = gameState.isCorrect;
   const sortedPlayers = [...gameState.players].sort((a, b) => b.score - a.score);
+  const clueGiverId = gameState.clueGiverId || gameState.guesserId;
+  const clueGiverName = gameState.clueGiverName || gameState.guesserName || 'Clue Typer';
+  const clueWord = gameState.clue || (gameState.clues && gameState.clues[0]?.rawClue) || '';
+  const clueGiverDelta = gameState.scoreDeltas?.[clueGiverId] ?? 0;
+
+  const guesses = gameState.guesses ?? [];
+  const correctCount = guesses.filter(g => g.isCorrect).length;
+  const totalGuessers = Math.max(1, gameState.players.length - 1);
 
   return (
     <div className="min-h-screen p-4 max-w-lg mx-auto flex flex-col animate-fade-in pb-10">
-      {/* Result banner */}
-      <div className={`text-center py-8 rounded-2xl mt-6 mb-6 ${
-        isCorrect
-          ? 'bg-emerald-alive/10 border-2 border-emerald-alive/40'
-          : 'bg-crimson-clash/10 border-2 border-crimson-clash/40'
-      }`}>
-        {isCorrect ? (
-          <>
-            <div className="font-display text-4xl md:text-5xl font-bold text-emerald-alive animate-score-pop">
-              CORRECT! 🎉
-            </div>
-            <p className="text-muted mt-3 text-lg">
-              <span className="text-ink font-bold">{gameState.guesserName}</span> guessed it!
-            </p>
-            <div className="mt-3 bg-surface-alt inline-block px-4 py-1 rounded-full">
-              <span className="font-mono font-bold text-emerald-alive">
-                {gameState.secretWord?.toUpperCase()}
+      {/* Result header banner */}
+      <div
+        className={`text-center py-7 px-4 rounded-2xl mt-6 mb-6 ${
+          correctCount > 0
+            ? 'bg-emerald-alive/10 border-2 border-emerald-alive/40'
+            : 'bg-crimson-clash/10 border-2 border-crimson-clash/40'
+        }`}
+      >
+        <div
+          className={`font-display text-3xl md:text-4xl font-bold ${
+            correctCount > 0 ? 'text-emerald-alive' : 'text-crimson-clash'
+          } animate-score-pop`}
+        >
+          {correctCount > 0
+            ? `${correctCount} of ${totalGuessers} Guessed Correctly! 🎉`
+            : 'Nobody Guessed Correctly! 😶'}
+        </div>
+
+        <p className="text-muted mt-2 text-sm">
+          Category: <span className="text-ink font-semibold">{gameState.category}</span>
+        </p>
+
+        {/* Secret Word & Clue display */}
+        <div className="mt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
+          <div className="bg-surface-alt/80 border border-white/10 px-4 py-2 rounded-xl">
+            <span className="text-[10px] uppercase tracking-wider text-muted block">Secret Word</span>
+            <span className="font-display font-bold text-xl text-cyan-glow uppercase">
+              {gameState.secretWord}
+            </span>
+          </div>
+          {clueWord && (
+            <div className="bg-surface-alt/80 border border-white/10 px-4 py-2 rounded-xl">
+              <span className="text-[10px] uppercase tracking-wider text-muted block">Clue Word</span>
+              <span className="font-display font-bold text-xl text-emerald-alive uppercase">
+                {clueWord}
               </span>
             </div>
-          </>
-        ) : (
-          <>
-            <div className="font-display text-4xl md:text-5xl font-bold text-crimson-clash">
-              {gameState.guess ? 'WRONG!' : "TIME'S UP!"}
-            </div>
-            {gameState.guess && (
-              <p className="text-muted mt-2">
-                <span className="text-ink font-bold">{gameState.guesserName}</span> guessed:{' '}
-                <span className="text-crimson-clash font-bold">{gameState.guess}</span>
-              </p>
-            )}
-            <p className="text-muted mt-3">The word was</p>
-            <div className="mt-1 font-display text-3xl font-bold text-ink">
-              {gameState.secretWord}
-            </div>
-          </>
-        )}
+          )}
+        </div>
       </div>
 
-      {/* Clue audit */}
-      {gameState.clues && gameState.clues.length > 0 && (
-        <div className="bg-surface border border-white/8 rounded-2xl p-5 mb-6">
-          <h3 className="text-xs text-muted uppercase tracking-widest font-bold mb-4">Clue Breakdown</h3>
-
-          {/* Guesser row */}
-          <div className="flex items-center justify-between p-3 rounded-xl bg-cyan-glow/10 border border-cyan-glow/20 mb-2">
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-bold text-cyan-glow uppercase bg-cyan-glow/20 px-2 py-0.5 rounded-full">Guesser</span>
-              <span className="font-semibold text-sm">{gameState.guesserName}</span>
-            </div>
-            <div className={`font-bold font-mono text-lg ${isCorrect ? 'text-emerald-alive' : 'text-muted'}`}>
-              {isCorrect ? '+100' : '+0'}
-            </div>
+      {/* Clue Typer Score Card */}
+      <div className="bg-surface border border-brand/30 rounded-2xl p-4 mb-4 flex items-center justify-between shadow-lg shadow-brand/10">
+        <div>
+          <div className="inline-flex items-center gap-2 mb-1">
+            <span className="text-[11px] font-bold uppercase bg-brand/20 text-brand-light px-2.5 py-0.5 rounded-full">
+              Clue Typer
+            </span>
+            <span className="font-bold text-ink text-sm">{clueGiverName}</span>
           </div>
+          <p className="text-xs text-muted">
+            Earned based on {correctCount}/{totalGuessers} correct guesses (max 50)
+          </p>
+        </div>
+        <div className="text-right">
+          <span className={`font-mono font-bold text-2xl ${clueGiverDelta > 0 ? 'text-amber-hot' : 'text-muted'}`}>
+            +{clueGiverDelta}
+          </span>
+          <span className="text-xs text-muted block">pts</span>
+        </div>
+      </div>
 
-          <div className="w-full h-px bg-white/8 my-2" />
-
-          {gameState.clues.map((c, i) => {
-            const delta = gameState.scoreDeltas?.[c.playerId] ?? 0;
-            return (
-              <div
-                key={i}
-                className="flex items-center justify-between p-3 rounded-xl bg-surface-alt/50 mb-1.5 last:mb-0"
-              >
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <span className="font-semibold text-sm truncate">{c.playerName}</span>
-                  <span className="text-muted text-sm">"{c.rawClue}"</span>
-                </div>
-                <div className="flex items-center gap-3 flex-shrink-0">
-                  {c.isDuplicate ? (
-                    <span className="text-xs font-bold text-crimson-clash bg-crimson-clash/10 px-2 py-0.5 rounded-full">
-                      DUPLICATE
+      {/* Guessers Breakdown */}
+      {guesses.length > 0 && (
+        <div className="bg-surface border border-white/8 rounded-2xl p-5 mb-6">
+          <h3 className="text-xs text-muted uppercase tracking-widest font-bold mb-3">Player Guesses</h3>
+          <div className="flex flex-col gap-2">
+            {guesses.map((g, i) => {
+              const delta = gameState.scoreDeltas?.[g.playerId] ?? (g.isCorrect ? 100 : 0);
+              return (
+                <div
+                  key={i}
+                  className={`flex items-center justify-between p-3 rounded-xl border ${
+                    g.isCorrect
+                      ? 'bg-emerald-alive/10 border-emerald-alive/30'
+                      : 'bg-surface-alt/50 border-white/5'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <span className="font-semibold text-sm truncate">{g.playerName}</span>
+                    <span className="text-muted text-xs font-mono uppercase">
+                      "{g.guess}"
                     </span>
-                  ) : (
-                    <span className="text-xs font-bold text-emerald-alive bg-emerald-alive/10 px-2 py-0.5 rounded-full">
-                      UNIQUE
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                        g.isCorrect
+                          ? 'bg-emerald-alive/20 text-emerald-alive'
+                          : 'bg-crimson-clash/20 text-crimson-clash'
+                      }`}
+                    >
+                      {g.isCorrect ? '✓ Correct' : '✕ Wrong'}
                     </span>
-                  )}
-                  <div className={`font-bold font-mono w-10 text-right ${delta > 0 ? 'text-emerald-alive' : 'text-muted'}`}>
-                    +{delta}
+                    <span
+                      className={`font-mono font-bold text-base w-12 text-right ${
+                        g.isCorrect ? 'text-emerald-alive' : 'text-muted'
+                      }`}
+                    >
+                      +{delta}
+                    </span>
                   </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       )}
 
-      {/* Live leaderboard */}
+      {/* Live Leaderboard */}
       <div className="bg-surface border border-white/8 rounded-2xl p-5">
         <h3 className="text-xs text-muted uppercase tracking-widest font-bold mb-4">Leaderboard</h3>
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2.5">
           {sortedPlayers.map((p, i) => {
             const maxScore = sortedPlayers[0]?.score || 1;
-            const barWidth = maxScore > 0 ? Math.max(4, (p.score / maxScore) * 100) : 4;
+            const barWidth = maxScore > 0 ? Math.max(6, (p.score / maxScore) * 100) : 6;
             return (
               <div key={p.id} className="flex items-center gap-3">
                 <div className="w-5 text-center font-bold text-xs text-muted">{i + 1}</div>
                 <div className="font-semibold text-sm w-24 truncate">{p.name}</div>
                 <div className="flex-1 bg-surface-alt rounded-full h-2 overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-gradient-to-r from-brand to-brand-light transition-all duration-700"
+                    className="h-full rounded-full bg-gradient-to-r from-brand to-cyan-glow transition-all duration-700"
                     style={{ width: `${barWidth}%` }}
                   />
                 </div>
@@ -215,7 +243,9 @@ export const GameOverView = ({
           {sortedPlayers.map((p, i) => (
             <div
               key={p.id}
-              className={`flex items-center gap-3 p-3 rounded-xl ${i === 0 ? 'bg-brand/10 border border-brand/20' : 'bg-surface-alt/50'}`}
+              className={`flex items-center gap-3 p-3 rounded-xl ${
+                i === 0 ? 'bg-brand/10 border border-brand/20' : 'bg-surface-alt/50'
+              }`}
             >
               <div className="w-5 text-center font-bold text-xs text-muted">{i + 1}</div>
               <div className="font-semibold text-sm flex-1">{p.name}</div>

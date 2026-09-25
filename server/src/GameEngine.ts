@@ -24,6 +24,13 @@ export interface ClueSubmission {
   isDuplicate: boolean;
 }
 
+export interface PlayerGuess {
+  playerId: string;
+  playerName: string;
+  guess: string;
+  isCorrect: boolean;
+}
+
 export interface Room {
   code: string;
   hostId: string;
@@ -36,17 +43,22 @@ export interface Room {
   };
   roundNumber: number;
   totalRounds: number;
-  guesserIndex: number;
+  clueGiverIndex: number;
   secretWord: string;
   category: string;
+  clue: string | null;
   clues: Map<string, ClueSubmission>;
+  guesses: Map<string, PlayerGuess>;
   guess: string | null;
   isCorrect: boolean | null;
   scoreDeltas: Record<string, number> | null;
   usedWords: Set<string>;
   timerHandle: ReturnType<typeof setInterval> | null;
   timeRemaining: number;
+  clueGiverOrder: string[];
+  // Backwards compatibility aliases
   guesserOrder: string[];
+  guesserIndex: number;
 }
 
 // ─── Client-safe types ────────────────────────────────────────────────────────
@@ -66,29 +78,40 @@ export interface ClientGameState {
   isHost: boolean;
   roundNumber: number;
   totalRounds: number;
+  clueGiverId: string;
+  clueGiverName: string;
+  isClueGiver: boolean;
+  isGuesser: boolean;
+  // Aliases for compatibility
   guesserId: string;
   guesserName: string;
-  isGuesser: boolean;
   category: string;
-  /** null when receiver IS the guesser during active play */
+  /** null when receiver is NOT the clue giver during active play */
   secretWord: string | null;
+  clue: string | null;
   timeRemaining: number;
   submissionProgress: {
     total: number;
     submitted: number;
     submittedIds: string[];
   };
-  /**
-   * null until CLUE_REVEAL begins.
-   * During GUESSING: unique clues only (duplicates hidden for guesser UX,
-   * but still included so watchers see all).
-   */
   clues: Array<{
     playerId: string;
     playerName: string;
     rawClue: string;
     isDuplicate: boolean;
   }> | null;
+  guesses: Array<{
+    playerId: string;
+    playerName: string;
+    guess: string;
+    isCorrect: boolean;
+  }> | null;
+  hasGuessed: boolean;
+  guessProgress: {
+    total: number;
+    submitted: number;
+  };
   guess: string | null;
   isCorrect: boolean | null;
   scoreDeltas: Record<string, number> | null;
@@ -128,32 +151,58 @@ export function buildClientState(room: Room, forPlayerId: string): ClientGameSta
   }));
 
   const myPlayer = room.players.get(forPlayerId);
-  const guesserId = room.guesserOrder[room.guesserIndex] ?? '';
-  const guesserPlayer = room.players.get(guesserId);
-  const isGuesser = forPlayerId === guesserId;
+  const clueGiverOrder = room.clueGiverOrder.length > 0 ? room.clueGiverOrder : room.guesserOrder;
+  const clueGiverIdx = room.clueGiverIndex >= 0 ? room.clueGiverIndex : (room.guesserIndex >= 0 ? room.guesserIndex : 0);
+  const clueGiverId = clueGiverOrder[clueGiverIdx] ?? '';
+  const clueGiverPlayer = room.players.get(clueGiverId);
+  const isClueGiver = forPlayerId === clueGiverId;
+  const isGuesser = !isClueGiver;
 
-  // ── Security: never leak secretWord to guesser during active play ──────────
+  // ── Security: never leak secretWord to guessers during active play ──────────
   const phaseReveal: GamePhase[] = ['ROUND_RESULT', 'GAME_OVER', 'LOBBY'];
-  const secretWord = (isGuesser && !phaseReveal.includes(room.phase))
+  const secretWord = (!isClueGiver && !phaseReveal.includes(room.phase))
     ? null
     : room.secretWord || null;
 
   // ── Clue visibility rules ──────────────────────────────────────────────────
-  //  - LOBBY / ROUND_INTRO / CLUE_SUBMISSION: no clue text to anyone
-  //  - CLUE_REVEAL onwards: full list with isDuplicate flags
-  let cluesArray: ClientGameState['clues'] = null;
+  //  - LOBBY / ROUND_INTRO: no clue text
+  //  - CLUE_SUBMISSION: clue giver sees their own draft, guessers see nothing
+  //  - CLUE_REVEAL onwards: visible to everyone
   const clueVisiblePhases: GamePhase[] = ['CLUE_REVEAL', 'GUESSING', 'ROUND_RESULT', 'GAME_OVER'];
-  if (clueVisiblePhases.includes(room.phase)) {
-    cluesArray = Array.from(room.clues.values()).map(c => ({
-      playerId: c.playerId,
-      playerName: room.players.get(c.playerId)?.name ?? 'Unknown',
-      rawClue: c.rawClue,
-      isDuplicate: c.isDuplicate,
+  const visibleClue = clueVisiblePhases.includes(room.phase) ? (room.clue || null) : null;
+
+  let cluesArray: ClientGameState['clues'] = null;
+  if (visibleClue) {
+    cluesArray = [{
+      playerId: clueGiverId,
+      playerName: clueGiverPlayer?.name ?? 'Clue Giver',
+      rawClue: visibleClue,
+      isDuplicate: false,
+    }];
+  }
+
+  // Guesses list: only revealed in ROUND_RESULT / GAME_OVER to prevent copying
+  let guessesArray: ClientGameState['guesses'] = null;
+  if (['ROUND_RESULT', 'GAME_OVER'].includes(room.phase)) {
+    guessesArray = Array.from(room.guesses.values()).map(g => ({
+      playerId: g.playerId,
+      playerName: g.playerName,
+      guess: g.guess,
+      isCorrect: g.isCorrect,
     }));
   }
 
-  // Submission progress (no text, just status)
-  const giversTotal = Math.max(0, room.players.size - (room.guesserOrder.length > 0 ? 1 : 0));
+  // Guessing progress
+  const activeGuessers = Array.from(room.players.values()).filter(p => p.connected && p.id !== clueGiverId);
+  const totalGuessers = activeGuessers.length;
+  const submittedGuessCount = Array.from(room.guesses.keys()).filter(id => {
+    const pl = room.players.get(id);
+    return pl && pl.connected && id !== clueGiverId;
+  }).length;
+  const hasGuessed = room.guesses.has(forPlayerId);
+
+  // Clue submission progress (1 clue giver)
+  const isClueSubmitted = room.clue !== null;
 
   return {
     roomCode: room.code,
@@ -163,18 +212,28 @@ export function buildClientState(room: Room, forPlayerId: string): ClientGameSta
     isHost: myPlayer?.isHost ?? false,
     roundNumber: room.roundNumber,
     totalRounds: room.totalRounds,
-    guesserId,
-    guesserName: guesserPlayer?.name ?? '',
+    clueGiverId,
+    clueGiverName: clueGiverPlayer?.name ?? '',
+    isClueGiver,
     isGuesser,
+    guesserId: clueGiverId,
+    guesserName: clueGiverPlayer?.name ?? '',
     category: room.category ?? '',
     secretWord,
+    clue: visibleClue,
     timeRemaining: room.timeRemaining,
     submissionProgress: {
-      total: giversTotal,
-      submitted: room.clues.size,
-      submittedIds: Array.from(room.clues.keys()),
+      total: 1,
+      submitted: isClueSubmitted ? 1 : 0,
+      submittedIds: isClueSubmitted ? [clueGiverId] : [],
     },
     clues: cluesArray,
+    guesses: guessesArray,
+    hasGuessed,
+    guessProgress: {
+      total: totalGuessers,
+      submitted: submittedGuessCount,
+    },
     guess: room.guess,
     isCorrect: room.isCorrect,
     scoreDeltas: room.scoreDeltas,
