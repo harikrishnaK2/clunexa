@@ -59,7 +59,9 @@ export const ClueSubmissionView = ({
       return;
     }
     // Check if clue matches secret word (client-side validation prevents lock-out)
-    if (gameState.secretWord && trimmed.toUpperCase() === gameState.secretWord.toUpperCase()) {
+    const normClue = trimmed.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const normSecret = (gameState.secretWord || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (normClue && normSecret && normClue === normSecret) {
       setError('You cannot use the secret word as your clue! Try another word.');
       // KEEP INPUT UNLOCKED so the user can immediately retype!
       return;
