@@ -99,47 +99,83 @@
   success() {
     if (this.muted) return;
     const ctx = this.getCtx();
-    // Rising glide sweep
-    const sweep = ctx.createOscillator();
-    const sweepGain = ctx.createGain();
-    sweep.type = 'sine';
-    sweep.connect(sweepGain); sweepGain.connect(ctx.destination);
-    sweep.frequency.setValueAtTime(300, ctx.currentTime);
-    sweep.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.3);
-    sweepGain.gain.setValueAtTime(0.15, ctx.currentTime);
-    sweepGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
-    sweep.start(ctx.currentTime); sweep.stop(ctx.currentTime + 0.4);
-
-    // Victory chord after sweep
-    [[523, 'triangle'], [659, 'sine'], [784, 'sine'], [1047, 'sine']].forEach(([freq, type], i) => {
+  
+    // Rapid ascending sparkle arpeggio
+    const sparkleFreqs = [523, 659, 784, 1047, 1319, 1568];
+    sparkleFreqs.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = freq;
+      const t = ctx.currentTime + i * 0.06;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(0.28, t + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+      osc.start(t); osc.stop(t + 0.28);
+    });
+  
+    // Big triumph chord burst after arpeggio
+    const chordTime = ctx.currentTime + 0.42;
+    [[523, 'triangle'], [659, 'sine'], [784, 'sine'], [1047, 'sine'], [1319, 'sine']].forEach(([freq, type]) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = type as OscillatorType;
-      osc.connect(gain); gain.connect(ctx.destination);
       osc.frequency.value = freq as number;
-      const t = ctx.currentTime + 0.25 + i * 0.06;
-      gain.gain.setValueAtTime(0.18, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
-      osc.start(t); osc.stop(t + 0.55);
+      osc.connect(gain); gain.connect(ctx.destination);
+      gain.gain.setValueAtTime(0.22, chordTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, chordTime + 0.8);
+      osc.start(chordTime); osc.stop(chordTime + 0.9);
+    });
+  
+    // Glitter shimmer on top
+    [2093, 2637, 3136].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      osc.connect(gain); gain.connect(ctx.destination);
+      const t = chordTime + i * 0.1;
+      gain.gain.setValueAtTime(0.08, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+      osc.start(t); osc.stop(t + 0.35);
     });
   }
 
   fail() {
     if (this.muted) return;
     const ctx = this.getCtx();
-    // Two womp notes
-    [220, 160].forEach((freq, i) => {
+  
+    // Classic game-over descending tones
+    [440, 370, 311, 220].forEach((freq, i) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'sawtooth';
       osc.connect(gain); gain.connect(ctx.destination);
-      osc.frequency.setValueAtTime(freq + 40, ctx.currentTime + i * 0.3);
-      osc.frequency.exponentialRampToValueAtTime(freq * 0.6, ctx.currentTime + i * 0.3 + 0.35);
-      gain.gain.setValueAtTime(0.22, ctx.currentTime + i * 0.3);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.3 + 0.4);
-      osc.start(ctx.currentTime + i * 0.3);
-      osc.stop(ctx.currentTime + i * 0.3 + 0.45);
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.13);
+      osc.frequency.exponentialRampToValueAtTime(freq * 0.85, ctx.currentTime + i * 0.13 + 0.15);
+      gain.gain.setValueAtTime(0.2, ctx.currentTime + i * 0.13);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.13 + 0.18);
+      osc.start(ctx.currentTime + i * 0.13);
+      osc.stop(ctx.currentTime + i * 0.13 + 0.2);
     });
+  
+    // Low thud at the end
+    const bufferSize = ctx.sampleRate * 0.15;
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufferSize, 3);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 120;
+    const gain = ctx.createGain();
+    source.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
+    const thudTime = ctx.currentTime + 0.55;
+    gain.gain.setValueAtTime(0.6, thudTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, thudTime + 0.2);
+    source.start(thudTime); source.stop(thudTime + 0.25);
   }
 
   tick() {
@@ -237,6 +273,68 @@
       g.gain.setValueAtTime(0.1, t);
       g.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
       o.start(t); o.stop(t + 0.45);
+    });
+  }
+
+  roundResult() {
+    if (this.muted) return;
+    const ctx = this.getCtx();
+  
+    // Stadium crowd roar simulation (layered noise bursts)
+    for (let i = 0; i < 5; i++) {
+      const bufSize = ctx.sampleRate * 0.3;
+      const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let j = 0; j < bufSize; j++) d[j] = Math.random() * 2 - 1;
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.value = 800 + i * 200;
+      filter.Q.value = 0.5;
+      const gain = ctx.createGain();
+      src.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
+      const t = ctx.currentTime + i * 0.08;
+      gain.gain.setValueAtTime(0.06, t);
+      gain.gain.linearRampToValueAtTime(0.12, t + 0.1);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+      src.start(t); src.stop(t + 0.55);
+    }
+  
+    // Punchy horn fanfare
+    const hornFreqs = [392, 523, 659, 784, 659, 784, 1047];
+    const hornDurations = [0.12, 0.12, 0.12, 0.25, 0.1, 0.12, 0.5];
+    let t = ctx.currentTime + 0.3;
+    hornFreqs.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = freq;
+      osc.connect(gain); gain.connect(ctx.destination);
+      gain.gain.setValueAtTime(0.18, t);
+      gain.gain.setValueAtTime(0.18, t + hornDurations[i] - 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + hornDurations[i]);
+      osc.start(t); osc.stop(t + hornDurations[i] + 0.02);
+      t += hornDurations[i] + 0.02;
+    });
+  
+    // Bass kicks on the beat
+    [0, 0.25, 0.5, 0.75].forEach(delay => {
+      const bufSize = ctx.sampleRate * 0.1;
+      const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let j = 0; j < bufSize; j++) d[j] = (Math.random() * 2 - 1) * Math.pow(1 - j / bufSize, 2);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 100;
+      const gain = ctx.createGain();
+      src.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
+      const startT = ctx.currentTime + delay;
+      gain.gain.setValueAtTime(0.7, startT);
+      gain.gain.exponentialRampToValueAtTime(0.001, startT + 0.12);
+      src.start(startT); src.stop(startT + 0.15);
     });
   }
 }

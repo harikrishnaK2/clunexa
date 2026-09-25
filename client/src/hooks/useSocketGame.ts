@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+﻿import { useEffect, useState, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { ClientGameState } from '../types/game';
 import { sounds } from '../utils/sounds';
@@ -85,6 +85,7 @@ export function useSocketGame() {
         if (prev?.phase !== state.phase) {
           if (state.phase === 'CLUE_REVEAL') sounds.reveal();
           if (state.phase === 'ROUND_INTRO') sounds.gameStart();
+          if (state.phase === 'ROUND_RESULT') sounds.roundResult();
         }
         return state;
       });
@@ -126,7 +127,7 @@ export function useSocketGame() {
   const emit = useCallback((event: string, data?: unknown) => {
     const s = socketRef.current;
     if (!s) { setErrorMessage('Not connected to server. Please refresh.'); return false; }
-    if (!s.connected) { setErrorMessage('Connection lost. Reconnecting…'); return false; }
+    if (!s.connected) { setErrorMessage('Connection lost. Reconnectingâ€¦'); return false; }
     if (data !== undefined) s.emit(event, data);
     else s.emit(event);
     return true;
@@ -180,7 +181,7 @@ export function useSocketGame() {
       const url = `${window.location.origin}?room=${gameState.roomCode}`;
       navigator.clipboard.writeText(url)
         .then(() => {
-          setErrorMessage('🔗 Link copied!');
+          setErrorMessage('ðŸ”— Link copied!');
           setTimeout(() => setErrorMessage(null), 2500);
         })
         .catch(() => {
@@ -225,5 +226,6 @@ export function useSocketGame() {
     clearError: useCallback(() => setErrorMessage(null), []),
   };
 }
+
 
 

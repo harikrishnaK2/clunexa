@@ -9,7 +9,7 @@ export const RoundResultView = ({ gameState }: { gameState: ClientGameState }) =
   useEffect(() => {
     if (gameState.isCorrect === true) sounds.success();
     else if (gameState.isCorrect === false) sounds.fail();
-  }, [gameState.isCorrect]);
+  }, []);
 
   const sortedPlayers = [...gameState.players].sort((a, b) => b.score - a.score);
   const clueGiverId = gameState.clueGiverId || gameState.guesserId;
@@ -334,4 +334,5 @@ export const GameOverView = ({
     </div>
   );
 };
+
 
