@@ -393,7 +393,10 @@ io.on('connection', (socket) => {
       currentRoom.clue = null;
       currentRoom.clues.clear();
       currentRoom.guesses.clear();
-      currentRoom.usedWords.clear();
+      // Preserve usedWords across games so words do not repeat on "Play Again"
+      if (currentRoom.usedWords.size >= 250) {
+        currentRoom.usedWords.clear();
+      }
       currentRoom.guess = null;
       currentRoom.isCorrect = null;
       currentRoom.scoreDeltas = null;
