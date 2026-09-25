@@ -9,16 +9,33 @@ export const ClueSubmissionView = ({
   gameState,
   actions,
   timeRemaining,
+  errorMessage,
 }: {
   gameState: ClientGameState;
   actions: GameActions;
   timeRemaining: number;
+  errorMessage?: string | null;
 }) => {
   const [clue, setClue] = useState('');
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [error, setError] = useState('');
 
-  const isAlreadySubmitted = hasSubmitted || gameState.clue !== null;
+  // Reset local state if a new round starts
+  React.useEffect(() => {
+    setHasSubmitted(false);
+    setClue('');
+    setError('');
+  }, [gameState.roundNumber]);
+
+  // Unlock input if server rejected the clue or emitted an error
+  React.useEffect(() => {
+    if (errorMessage) {
+      setHasSubmitted(false);
+      setError(errorMessage);
+    }
+  }, [errorMessage]);
+
+  const isAlreadySubmitted = hasSubmitted && gameState.clue !== null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,8 +44,9 @@ export const ClueSubmissionView = ({
       setError('Please enter a clue.');
       return;
     }
-    if (trimmed.includes(' ')) {
-      setError('One word only — no spaces!');
+    // Disallow multiple words (any whitespace inside the trimmed clue)
+    if (/\s/.test(trimmed)) {
+      setError('One word only — no multiple words!');
       return;
     }
     // Reject emojis or non-letters
@@ -91,24 +109,41 @@ export const ClueSubmissionView = ({
               type="text"
               value={clue}
               onChange={e => {
-                // Strictly block emojis, numbers, and symbols from being typed or pasted
-                const filtered = e.target.value.replace(/[^a-zA-Z]/g, '');
-                setClue(filtered);
-                setError('');
+                const rawVal = e.target.value;
+                if (!rawVal) {
+                  setClue('');
+                  setError('');
+                  return;
+                }
+
+                // Strip leading spaces
+                const noLeadingSpaces = rawVal.replace(/^\s+/, '');
+                if (!noLeadingSpaces) {
+                  setClue('');
+                  return;
+                }
+
+                // Allow 1 word (letters only, max 20) followed by optional spaces
+                // Any second word or invalid character typed after the space is completely ignored/not accepted
+                const match = noLeadingSpaces.match(/^([a-zA-Z]{1,20})(\s*)/);
+                if (match) {
+                  const allowedValue = match[1] + match[2];
+                  setClue(allowedValue);
+                  setError('');
+                }
               }}
               placeholder="Type your clue…"
-              maxLength={20}
               autoFocus
               autoComplete="off"
               className="bg-surface-alt border border-white/10 text-ink rounded-xl px-5 py-5 focus:outline-none focus:border-brand/60 focus:ring-2 focus:ring-brand/20 w-full text-center text-3xl font-display font-bold uppercase tracking-wider transition-all duration-150 placeholder:text-white/20 placeholder:font-normal placeholder:text-lg placeholder:tracking-normal"
             />
             <div className="absolute bottom-2 right-3 text-xs text-muted font-mono">
-              {clue.length}/20
+              {clue.trim().length}/20
             </div>
           </div>
 
           <p className="text-muted/60 text-xs text-center font-medium">
-            Letters only · No emojis or spaces
+            Single word · Spaces allowed after the word · Letters only
           </p>
 
           {error && (
@@ -120,9 +155,10 @@ export const ClueSubmissionView = ({
           <button
             type="submit"
             disabled={!clue.trim()}
-            className="py-5 font-display font-bold text-xl rounded-xl transition-all duration-200 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed bg-brand hover:bg-brand-light text-ink shadow-lg shadow-brand/30 mt-2"
+            className="py-5 font-display font-bold text-xl rounded-xl transition-all duration-200 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed bg-brand hover:bg-brand-light text-ink shadow-lg shadow-brand/30 mt-2 flex items-center justify-center gap-2"
           >
-            Submit Clue →
+            <span>Lock in Clue</span>
+            <span>🔒</span>
           </button>
         </form>
       ) : (
@@ -130,8 +166,15 @@ export const ClueSubmissionView = ({
           <div className="w-16 h-16 bg-emerald-alive/20 text-emerald-alive rounded-full flex items-center justify-center text-3xl mx-auto mb-4">
             ✓
           </div>
-          <h3 className="font-display text-xl font-bold text-emerald-alive mb-2">Clue Submitted!</h3>
-          <p className="text-muted">Revealing clue to other players…</p>
+          <h3 className="font-display text-xl font-bold text-emerald-alive mb-2">Clue Locked In!</h3>
+          <p className="text-muted text-sm mb-4">Revealing clue to other players…</p>
+          <button
+            type="button"
+            onClick={() => setHasSubmitted(false)}
+            className="text-xs text-brand-light hover:underline font-medium"
+          >
+            Edit Clue ✎
+          </button>
         </div>
       )}
 

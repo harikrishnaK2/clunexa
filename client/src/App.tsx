@@ -77,7 +77,14 @@ function App() {
 
       case 'CLUE_SUBMISSION':
         return gameState.isClueGiver
-          ? <ClueSubmissionView gameState={gameState} actions={actions} timeRemaining={timeRemaining} />
+          ? (
+              <ClueSubmissionView
+                gameState={gameState}
+                actions={actions}
+                timeRemaining={timeRemaining}
+                errorMessage={errorMessage}
+              />
+            )
           : <GuesserWaitingView gameState={gameState} timeRemaining={timeRemaining} />;
 
       case 'CLUE_REVEAL':
