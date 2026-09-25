@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { useSocketGame } from './hooks/useSocketGame';
 import { ErrorToast, ConnectionBanner } from './components/ui/Global';
 import { LandingView } from './components/views/LandingView';
@@ -188,7 +188,7 @@ function App() {
               className="text-xl hover:scale-110 active:scale-95 transition-all"
               title={muted ? 'Unmute' : 'Mute'}
             >
-              {muted ? '🔇' : '🔊'}
+              {muted ? 'ðŸ”‡' : 'ðŸ”Š'}
             </button>
             <button
               type="button"
@@ -220,7 +220,7 @@ function App() {
         }}
       />
 
-      <div className={`min-h-screen bg-void text-ink overflow-x-hidden ${gameState ? 'pt-12 pb-16' : ''}`}>
+      <div className={`min-h-screen bg-void text-ink overflow-x-hidden ${gameState ? 'pt-12 pr-14' : ''}`}>
         {renderView()}
       </div>
     </>
@@ -228,3 +228,4 @@ function App() {
 }
 
 export default App;
+

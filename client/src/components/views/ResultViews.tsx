@@ -186,6 +186,7 @@ export const GameOverView = ({
   const [first, second, third] = sortedPlayers;
 
   useEffect(() => {
+    sounds.victory();
     // Launch confetti!
     const burst = () => {
       confetti({
@@ -333,3 +334,4 @@ export const GameOverView = ({
     </div>
   );
 };
+
